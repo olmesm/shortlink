@@ -4,6 +4,20 @@ A self-hosted URL shortener written in F#, built on [Falco](https://www.falcofra
 and [htmx](https://htmx.org/). Single binary, full REST API, server-rendered admin
 dashboard, rich visit analytics.
 
+**[📖 User documentation](https://olmesm.github.io/shortlink/)** · [Quick start](#quick-start) · [Configuration](#configuration) · [REST API](#rest-api)
+
+## Screenshots
+
+| Overview | Short URLs |
+|---|---|
+| ![Overview dashboard](docs/screenshots/overview.png) | ![Short URL list](docs/screenshots/short-urls.png) |
+
+| Visit analytics | Redirect rules |
+|---|---|
+| ![Visit analytics](docs/screenshots/visits.png) | ![Redirect rule builder](docs/screenshots/edit-rules.png) |
+
+More in the [user documentation](https://olmesm.github.io/shortlink/).
+
 ## Features
 
 - **Short URLs** — auto-generated codes (configurable length) or custom slugs

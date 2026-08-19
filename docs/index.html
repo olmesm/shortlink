@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html" class="active">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>Shortlink</h1>
+<p class="lead">A self-hosted URL shortener with a full REST API, an htmx-powered admin
+dashboard and privacy-aware visit analytics. Written in F# on
+<a href="https://www.falcoframework.com/">Falco</a>, runs as a single binary with SQLite
+or PostgreSQL.</p>
+
+<p><img src="screenshots/overview.png" alt="The Shortlink overview dashboard"></p>
+
+<h2>Highlights</h2>
+<ul>
+  <li><strong>Short URLs</strong> — generated codes or custom slugs, tags, titles,
+      configurable redirect status, query-string forwarding.</li>
+  <li><strong>Conditional redirect rules</strong> — send Android, iOS, language,
+      query-param or IP-range traffic to different targets per link.</li>
+  <li><strong>Lifetime controls</strong> — start/end dates and maximum visit counts.</li>
+  <li><strong>Analytics</strong> — referrers, browsers, operating systems, devices,
+      bot detection and GeoLite2 geolocation, with orphan-traffic tracking.
+      IPs are anonymized by default.</li>
+  <li><strong>Multi-domain</strong> — serve many domains from one instance; codes are
+      unique per domain.</li>
+  <li><strong>REST API</strong> — everything scriptable, with role-scoped API keys.</li>
+  <li><strong>Webhooks</strong> — signed JSON deliveries with retries.</li>
+  <li><strong>QR codes</strong> — PNG or SVG for every link.</li>
+</ul>
+
+<h2>Where to go next</h2>
+<ul>
+  <li><a href="getting-started.html">Getting started</a> — run it with Docker or the .NET SDK, and configure it.</li>
+  <li><a href="dashboard.html">The dashboard</a> — a tour of every screen.</li>
+  <li><a href="short-urls.html">Short URLs</a> — slugs, lifetimes, redirect rules, QR codes.</li>
+  <li><a href="analytics.html">Analytics &amp; tracking</a> — what is recorded, and the privacy switches.</li>
+  <li><a href="api.html">REST API</a> — endpoints, auth and examples.</li>
+  <li><a href="integrations.html">Webhooks &amp; domains</a> — event payloads, signatures, multi-domain setup.</li>
+</ul>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

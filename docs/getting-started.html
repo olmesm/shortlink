@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html" class="active">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>Getting started</h1>
+
+<h2>Run with Docker</h2>
+<pre><code>git clone https://github.com/olmesm/shortlink
+cd shortlink
+docker compose up --build</code></pre>
+<p>Open <code>http://localhost:8080/admin</code>. On first start an <code>admin</code>
+user is created. Its password comes from
+<code>SHORTLINK_INITIAL_ADMIN_PASSWORD</code> if set — otherwise a password is
+generated and printed once in the container log:</p>
+<pre><code>docker compose logs shortlink | grep "admin user"</code></pre>
+<p>To use PostgreSQL instead of the embedded SQLite database:</p>
+<pre><code>docker compose --profile postgres up --build</code></pre>
+<p>and un-comment the <code>SHORTLINK_DB_*</code> variables in
+<code>docker-compose.yml</code>.</p>
+
+<h2>Run from source</h2>
+<p>Requires the .NET 8 SDK.</p>
+<pre><code>dotnet run --project src/Shortlink.Web       # serves on :8080
+dotnet test                                  # 88 unit + integration tests
+cd e2e &amp;&amp; npm install &amp;&amp; npm test             # 22 Playwright browser tests</code></pre>
+
+<h2>First login</h2>
+<p><img src="screenshots/login.png" alt="Login screen" class="narrow"></p>
+<p>Sign in at <code>/admin/login</code> with the initial admin account, then:</p>
+<ol>
+  <li>Create your own account under <strong>Users</strong> (or change the admin password).</li>
+  <li>Create an <strong>API key</strong> if you want to script the REST API.</li>
+  <li>Set <code>SHORTLINK_DEFAULT_DOMAIN</code> to the public domain your links
+      will live on (e.g. <code>sho.rt</code>) so generated short URLs render correctly.</li>
+</ol>
+
+<h2>Configuration reference</h2>
+<p>Everything is configured with environment variables.</p>
+<table>
+<tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+<tr><td><code>SHORTLINK_PORT</code></td><td><code>8080</code></td><td>HTTP listen port</td></tr>
+<tr><td><code>SHORTLINK_DEFAULT_DOMAIN</code></td><td><code>localhost:&lt;port&gt;</code></td><td>Authority used to build short URLs</td></tr>
+<tr><td><code>SHORTLINK_USE_HTTPS</code></td><td><code>false</code></td><td>Render short URLs with <code>https://</code></td></tr>
+<tr><td><code>SHORTLINK_DATA_DIR</code></td><td><code>./data</code></td><td>SQLite db, GeoLite2 db, cookie keys</td></tr>
+<tr><td><code>SHORTLINK_DB_DRIVER</code></td><td><code>sqlite</code></td><td><code>sqlite</code> or <code>postgres</code></td></tr>
+<tr><td><code>SHORTLINK_DB_CONNECTION</code></td><td><em>SQLite in data dir</em></td><td>Full connection string</td></tr>
+<tr><td><code>SHORTLINK_SHORT_CODE_LENGTH</code></td><td><code>5</code></td><td>Length of generated codes (min 4)</td></tr>
+<tr><td><code>SHORTLINK_REDIRECT_STATUS</code></td><td><code>302</code></td><td>Default redirect status (301/302/307/308)</td></tr>
+<tr><td><code>SHORTLINK_AUTO_RESOLVE_TITLES</code></td><td><code>true</code></td><td>Fetch page titles in the background</td></tr>
+<tr><td><code>SHORTLINK_DISABLE_TRACKING</code></td><td><code>false</code></td><td>Record no visits at all</td></tr>
+<tr><td><code>SHORTLINK_DISABLE_IP_TRACKING</code></td><td><code>false</code></td><td>Track visits but never record IPs</td></tr>
+<tr><td><code>SHORTLINK_ANONYMIZE_IPS</code></td><td><code>true</code></td><td>Zero the host bits of recorded IPs</td></tr>
+<tr><td><code>SHORTLINK_TRACK_SKIP_PARAM</code></td><td><em>unset</em></td><td>Query param that opts a request out of tracking</td></tr>
+<tr><td><code>SHORTLINK_TRACK_ORPHAN_VISITS</code></td><td><code>true</code></td><td>Track base-URL / 404 traffic</td></tr>
+<tr><td><code>SHORTLINK_BASE_URL_REDIRECT</code></td><td><em>unset</em></td><td>Where <code>GET /</code> redirects (else a landing page)</td></tr>
+<tr><td><code>SHORTLINK_REGULAR_404_REDIRECT</code></td><td><em>unset</em></td><td>Redirect for non-short-URL 404s</td></tr>
+<tr><td><code>SHORTLINK_INVALID_SHORT_URL_REDIRECT</code></td><td><em>unset</em></td><td>Redirect for unknown or expired short codes</td></tr>
+<tr><td><code>SHORTLINK_GEOLITE_LICENSE_KEY</code></td><td><em>unset</em></td><td>Enables GeoLite2 download + geolocation</td></tr>
+<tr><td><code>SHORTLINK_INITIAL_ADMIN_USERNAME</code></td><td><code>admin</code></td><td>First-run dashboard admin</td></tr>
+<tr><td><code>SHORTLINK_INITIAL_ADMIN_PASSWORD</code></td><td><em>generated</em></td><td>First-run admin password</td></tr>
+<tr><td><code>SHORTLINK_RATE_LIMIT_PER_MINUTE</code></td><td><code>120</code></td><td>Mutating REST calls per minute per IP (0 disables)</td></tr>
+</table>
+<p>Behind a reverse proxy, <code>X-Forwarded-For</code> and
+<code>X-Forwarded-Proto</code> are honored. All timestamps are UTC.</p>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

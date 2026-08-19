@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analytics & tracking · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html" class="active">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>Analytics &amp; tracking</h1>
+
+<h2>What is recorded</h2>
+<p><img src="screenshots/visits.png" alt="Visit analytics for one short URL"></p>
+<p>Each redirect records a visit with: timestamp, referrer, user agent (parsed to
+browser and operating system), device class, bot detection, and — when geolocation
+is enabled — country, city and coordinates. Analytics pages show a per-day chart,
+breakdowns by country / browser / OS / referrer, and the raw visit log, all
+filterable by date range.</p>
+<p>Visit data can be queried per short URL, per tag, per domain, or globally — in
+the dashboard and via the <a href="api.html">stats endpoints</a>. Visits can also be
+deleted per link, and orphan visits purged wholesale.</p>
+
+<h2>Geolocation</h2>
+<p>Set <code>SHORTLINK_GEOLITE_LICENSE_KEY</code> (a free
+<a href="https://www.maxmind.com/en/geolite2/signup">MaxMind GeoLite2</a> license key)
+and the server downloads the city database automatically and refreshes it weekly.
+Visits are geolocated in the background, off the redirect path. Without a key,
+everything else still works — visits simply have no location.</p>
+
+<h2>Privacy controls</h2>
+<table>
+<tr><th>Setting</th><th>Effect</th></tr>
+<tr><td><code>SHORTLINK_ANONYMIZE_IPS=true</code> <em>(default)</em></td>
+    <td>the last IPv4 octet (or IPv6 host bits) is zeroed before storing —
+        country-level geolocation still works</td></tr>
+<tr><td><code>SHORTLINK_DISABLE_IP_TRACKING=true</code></td>
+    <td>no form of the visitor's IP is ever stored (disables geolocation)</td></tr>
+<tr><td><code>SHORTLINK_TRACK_SKIP_PARAM=no-track</code></td>
+    <td>requests carrying <code>?no-track</code> are redirected but not recorded</td></tr>
+<tr><td><code>SHORTLINK_TRACK_ORPHAN_VISITS=false</code></td>
+    <td>base-URL and 404 traffic is not recorded</td></tr>
+<tr><td><code>SHORTLINK_DISABLE_TRACKING=true</code></td>
+    <td>no visits are recorded at all (note: max-visit limits then never trigger)</td></tr>
+</table>
+
+<h2>Bot detection</h2>
+<p>User agents matching common crawler/bot/CLI patterns (Googlebot, curl, headless
+browsers, link preview fetchers, …) are flagged. Bot visits are counted separately
+and can be excluded from visit listings with <code>excludeBots=true</code>.</p>
+
+<h2>Orphan visits</h2>
+<p>Hits that didn't resolve to an active link are tracked separately in three
+classes: <em>base URL</em> (the bare domain), <em>invalid short URL</em>
+(a code-shaped path that doesn't exist — including expired links), and
+<em>regular 404</em> (anything else).</p>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

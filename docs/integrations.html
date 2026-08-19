@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webhooks & domains · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html" class="active">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>Webhooks &amp; multi-domain</h1>
+
+<h2>Webhooks</h2>
+<p>Webhooks POST a JSON payload to your endpoint when events happen:</p>
+<table>
+<tr><th>Event</th><th>Fires when</th></tr>
+<tr><td><code>url.created</code></td><td>a short URL is created (payload: the short URL object)</td></tr>
+<tr><td><code>visit.recorded</code></td><td>a short URL is visited</td></tr>
+<tr><td><code>orphan_visit.recorded</code></td><td>orphan traffic is recorded</td></tr>
+</table>
+<p>Delivery format:</p>
+<pre><code>POST &lt;your-url&gt;
+X-Shortlink-Event: visit.recorded
+X-Shortlink-Signature: sha256=&lt;hex&gt;
+
+{
+  "event": "visit.recorded",
+  "occurredAt": "2026-08-19T10:32:16Z",
+  "data": { "visitType": "valid", "shortUrl": { "shortCode": "promo", … }, … }
+}</code></pre>
+<p>The signature is the HMAC-SHA256 of the raw request body using the webhook's
+secret (shown once at creation). Verify it before trusting a delivery:</p>
+<pre><code># python
+import hmac, hashlib
+expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+valid = hmac.compare_digest(expected, request.headers["X-Shortlink-Signature"])</code></pre>
+<p>Failed deliveries are retried with exponential backoff (up to 6 attempts) from a
+persistent queue that survives restarts. Webhooks can be disabled temporarily
+without losing their configuration.</p>
+
+<h2>Multi-domain</h2>
+<p>One instance can serve short URLs on many domains. Short codes are unique
+<em>per domain</em>, so <code>sho.rt/hi</code> and <code>go.example.com/hi</code> can
+point at different targets.</p>
+<ol>
+  <li>Point the extra domain's DNS at your instance (and terminate TLS at your proxy).</li>
+  <li>Register it under <strong>Domains</strong> — or simply create a short URL with
+      that domain and it registers itself.</li>
+  <li>Optionally give the domain its own not-found redirects (base URL, regular 404,
+      invalid short URL); these override the global settings.</li>
+</ol>
+<p>The domain the visitor used is matched by the request's <code>Host</code> header;
+unknown hosts fall back to the default domain. The default domain (from
+<code>SHORTLINK_DEFAULT_DOMAIN</code>) cannot be deleted.</p>
+
+<h2>Not-found behavior</h2>
+<p>Three kinds of miss, each with its own configurable redirect (global via
+environment variables, or per domain):</p>
+<table>
+<tr><th>Case</th><th>Setting</th></tr>
+<tr><td>Visit to the bare domain</td><td><code>SHORTLINK_BASE_URL_REDIRECT</code></td></tr>
+<tr><td>Unknown or expired short code</td><td><code>SHORTLINK_INVALID_SHORT_URL_REDIRECT</code></td></tr>
+<tr><td>Any other 404</td><td><code>SHORTLINK_REGULAR_404_REDIRECT</code></td></tr>
+</table>
+<p>Unset targets render a minimal landing/404 page instead.</p>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

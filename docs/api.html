@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REST API · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html" class="active">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>REST API</h1>
+
+<h2>Authentication</h2>
+<p>Every <code>/rest/v1</code> endpoint requires an API key, sent as
+<code>X-Api-Key: &lt;key&gt;</code> (or <code>Authorization: Bearer &lt;key&gt;</code>).
+Keys are created in the dashboard or via the API and shown exactly once. Roles:</p>
+<table>
+<tr><th>Role</th><th>Scope</th></tr>
+<tr><td><code>admin</code></td><td>full access</td></tr>
+<tr><td><code>author</code></td><td>sees and manages only short URLs created with that key</td></tr>
+<tr><td><code>domain</code></td><td>restricted to one domain</td></tr>
+</table>
+<p>Errors are RFC 7807 <code>application/problem+json</code>. List endpoints accept
+<code>page</code> and <code>itemsPerPage</code> and return a <code>pagination</code>
+envelope. Mutating calls are rate limited per client IP.
+<code>GET /rest/health</code> needs no auth.</p>
+
+<h2>Quick example</h2>
+<pre><code>> curl -H "X-Api-Key: $KEY" -H "Content-Type: application/json" \
+    -d '{"longUrl":"https://example.com/landing","customSlug":"promo","tags":["marketing"]}' \
+    https://sho.rt/rest/v1/short-urls
+
+{
+  "shortCode": "promo",
+  "shortUrl": "https://sho.rt/promo",
+  "domain": "sho.rt",
+  "longUrl": "https://example.com/landing",
+  "dateCreated": "2026-08-19T10:21:48Z",
+  "tags": ["marketing"],
+  "meta": {},
+  "visitsSummary": { "total": 0, "nonBots": 0, "bots": 0 },
+  "forwardQuery": true,
+  "crawlable": false,
+  "redirectStatus": 302
+}</code></pre>
+
+<h2>Short URLs</h2>
+<table>
+<tr><th>Endpoint</th><th>Notes</th></tr>
+<tr><td><code>GET /rest/v1/short-urls</code></td>
+    <td><code>searchTerm</code>, <code>tags</code>, <code>tagsMode=any|all</code>,
+        <code>startDate</code>, <code>endDate</code>, <code>domain</code>,
+        <code>orderBy=dateCreated|shortCode|longUrl|title|visits</code> with
+        <code>-ASC/-DESC</code>, <code>excludeMaxVisitsReached</code>,
+        <code>excludePastValidUntil</code></td></tr>
+<tr><td><code>POST /rest/v1/short-urls</code></td>
+    <td><code>longUrl</code> (required), <code>customSlug</code>,
+        <code>shortCodeLength</code>, <code>domain</code>, <code>title</code>,
+        <code>tags</code>, <code>maxVisits</code>, <code>validSince</code>,
+        <code>validUntil</code>, <code>forwardQuery</code>, <code>crawlable</code>,
+        <code>redirectStatus</code>, <code>findIfExists</code></td></tr>
+<tr><td><code>GET /rest/v1/short-urls/{code}</code></td>
+    <td>optional <code>?domain=</code> on all <code>{code}</code> routes</td></tr>
+<tr><td><code>PATCH /rest/v1/short-urls/{code}</code></td>
+    <td>partial update; send <code>null</code> to clear <code>title</code>,
+        <code>maxVisits</code>, <code>validSince</code>, <code>validUntil</code></td></tr>
+<tr><td><code>DELETE /rest/v1/short-urls/{code}</code></td><td></td></tr>
+<tr><td><code>GET / POST /rest/v1/short-urls/{code}/redirect-rules</code></td>
+    <td>POST replaces all rules; condition types: <code>device</code>,
+        <code>language</code>, <code>query-param</code>, <code>ip-address</code></td></tr>
+<tr><td><code>GET /rest/v1/short-urls/{code}/visits</code></td>
+    <td><code>startDate</code>, <code>endDate</code>, <code>excludeBots</code></td></tr>
+<tr><td><code>DELETE /rest/v1/short-urls/{code}/visits</code></td><td></td></tr>
+</table>
+
+<h2>Tags, domains, visits, stats</h2>
+<table>
+<tr><th>Endpoint</th><th>Notes</th></tr>
+<tr><td><code>GET /rest/v1/tags</code></td><td><code>withStats=true</code>, <code>searchTerm</code></td></tr>
+<tr><td><code>PUT /rest/v1/tags</code></td><td><code>{"oldName":"a","newName":"b"}</code></td></tr>
+<tr><td><code>DELETE /rest/v1/tags?tags=a,b</code></td><td></td></tr>
+<tr><td><code>GET /rest/v1/tags/{tag}/visits</code></td><td></td></tr>
+<tr><td><code>GET /rest/v1/domains</code></td><td></td></tr>
+<tr><td><code>POST /rest/v1/domains</code></td><td>admin; <code>{"domain":"links.example.com"}</code></td></tr>
+<tr><td><code>PATCH /rest/v1/domains/redirects</code></td><td>admin; per-domain not-found redirects</td></tr>
+<tr><td><code>DELETE /rest/v1/domains/{authority}</code></td><td>admin; the default domain is protected</td></tr>
+<tr><td><code>GET /rest/v1/domains/{authority}/visits</code></td><td></td></tr>
+<tr><td><code>GET /rest/v1/visits</code></td><td>admin; global counters</td></tr>
+<tr><td><code>GET /rest/v1/visits/non-orphan</code>, <code>GET / DELETE /rest/v1/visits/orphan</code></td><td>admin</td></tr>
+<tr><td><code>GET /rest/v1/stats/visits-per-day</code></td>
+    <td>scope with <code>shortCode</code>, <code>tag</code>, <code>domain</code> or
+        <code>orphan=true</code>; <code>startDate</code>/<code>endDate</code></td></tr>
+<tr><td><code>GET /rest/v1/stats/breakdown?by=…</code></td>
+    <td><code>country</code>, <code>countryCode</code>, <code>city</code>,
+        <code>browser</code>, <code>os</code>, <code>referer</code>,
+        <code>device</code>; same scoping</td></tr>
+</table>
+
+<h2>API keys &amp; webhooks (admin)</h2>
+<table>
+<tr><th>Endpoint</th><th>Notes</th></tr>
+<tr><td><code>GET / POST /rest/v1/api-keys</code></td>
+    <td>create returns <code>apiKey</code> once; body: <code>name</code>,
+        <code>role</code>, <code>domain</code>, <code>expiresAt</code></td></tr>
+<tr><td><code>PATCH /rest/v1/api-keys/{id}</code></td><td><code>{"enabled":false}</code></td></tr>
+<tr><td><code>DELETE /rest/v1/api-keys/{id}</code></td><td></td></tr>
+<tr><td><code>GET / POST /rest/v1/webhooks</code></td><td>create returns the signing <code>secret</code> once</td></tr>
+<tr><td><code>PATCH / DELETE /rest/v1/webhooks/{id}</code></td><td></td></tr>
+</table>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

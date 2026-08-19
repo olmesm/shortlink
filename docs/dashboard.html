@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The dashboard · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html" class="active">The dashboard</a>
+    <a href="short-urls.html">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>The dashboard</h1>
+<p>The dashboard lives at <code>/admin</code>. It is server-rendered with htmx —
+searches, sorting and pagination update in place without page reloads.</p>
+
+<h2>Accounts and roles</h2>
+<p>Dashboard users are managed under <strong>Users</strong> (admins only). There are
+two roles:</p>
+<ul>
+  <li><strong>user</strong> — manages short URLs and tags, views analytics.</li>
+  <li><strong>admin</strong> — additionally manages domains, API keys, webhooks and users.</li>
+</ul>
+<p>The last remaining admin can be neither deleted nor demoted, so you cannot lock
+yourself out.</p>
+
+<h2>Overview</h2>
+<p><img src="screenshots/overview.png" alt="Overview page"></p>
+<p>Counters for short URLs, visits, orphan visits, tags and bot traffic, a 30-day
+visit chart, and the most recently created links.</p>
+
+<h2>Short URLs</h2>
+<p><img src="screenshots/short-urls.png" alt="Short URL list"></p>
+<p>The list is searchable (code, long URL, title, domain or tag), filterable by tag,
+and sortable by any column — including visit counts. See
+<a href="short-urls.html">Short URLs</a> for the full lifecycle.</p>
+
+<h2>Tags</h2>
+<p><img src="screenshots/tags.png" alt="Tag manager"></p>
+<p>Tags show how many links and visits they cover; rename or delete them inline.
+Renames apply to every tagged link at once. Deleting a tag never deletes links.</p>
+
+<h2>API keys</h2>
+<p><img src="screenshots/api-keys.png" alt="API key manager"></p>
+<p>Create keys for the REST API here. The plaintext key is shown <em>once</em> at
+creation — store it somewhere safe. Keys can expire, be disabled temporarily, or
+deleted. Roles are described in the <a href="api.html">API reference</a>.</p>
+
+<h2>Orphan visits</h2>
+<p><img src="screenshots/orphan-visits.png" alt="Orphan visits"></p>
+<p>Traffic that reached the server without hitting an active short URL: base-URL
+hits, unknown short codes, and other 404s — useful for spotting mistyped links and
+scanners. Admins can purge them.</p>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>

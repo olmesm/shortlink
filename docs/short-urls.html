@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Short URLs · Shortlink</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html">Shortlink</a>
+  <span class="tagline">self-hosted URL shortener · F# · Falco · htmx</span>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/olmesm/shortlink">GitHub</a>
+</header>
+<div class="wrap">
+  <nav class="side">
+    <a href="index.html">Home</a>
+    <a href="getting-started.html">Getting started</a>
+    <a href="dashboard.html">The dashboard</a>
+    <a href="short-urls.html" class="active">Short URLs</a>
+    <a href="analytics.html">Analytics & tracking</a>
+    <a href="api.html">REST API</a>
+    <a href="integrations.html">Webhooks & domains</a>
+  </nav>
+  <main>
+    <h1>Short URLs</h1>
+
+<h2>Creating links</h2>
+<p>Use <strong>+ New short URL</strong> in the dashboard or
+<code>POST /rest/v1/short-urls</code>. Options:</p>
+<ul>
+  <li><strong>Custom slug</strong> — instead of a generated code. Slugs may contain
+      letters, digits, <code>-_.~+</code> and slashes (<code>docs/intro</code> works).</li>
+  <li><strong>Domain</strong> — place the link on another registered domain; unknown
+      domains are auto-registered on first use.</li>
+  <li><strong>Title</strong> — set manually, or leave blank and the page title is
+      fetched automatically in the background.</li>
+  <li><strong>Tags</strong> — comma separated, for organizing and filtering.</li>
+  <li><strong>Redirect status</strong> — 301, 302 (default), 307 or 308.</li>
+  <li><strong>Forward query params</strong> — when on, <code>?utm_source=…</code> on
+      the short URL is appended to the long URL.</li>
+  <li><strong>Crawlable</strong> — include this link in <code>robots.txt</code>
+      as allowed for search engines.</li>
+</ul>
+
+<h2>Lifetime controls</h2>
+<p>Every link can carry:</p>
+<ul>
+  <li><strong>Valid since / until</strong> — outside the window the link behaves like
+      an unknown code.</li>
+  <li><strong>Max visits</strong> — after the limit is reached the link stops
+      redirecting.</li>
+</ul>
+<p>Expired or exhausted links fall through to the invalid-short-URL behavior
+(a 404 page, or a redirect you configure globally or per domain).</p>
+
+<h2>Conditional redirect rules</h2>
+<p><img src="screenshots/edit-rules.png" alt="Edit page with redirect rules"></p>
+<p>Rules override the long URL for matching visitors and are evaluated top-down;
+the first rule whose conditions <em>all</em> match wins. Conditions:</p>
+<table>
+<tr><th>Condition</th><th>Matches when…</th></tr>
+<tr><td>Device</td><td>the visitor is on Android, iOS, any mobile, or desktop</td></tr>
+<tr><td>Language</td><td>the <code>Accept-Language</code> header includes the language
+    (<code>en</code> matches <code>en-GB</code>; <code>en-US</code> is exact)</td></tr>
+<tr><td>Query param</td><td>the short URL was called with <code>?key=value</code></td></tr>
+<tr><td>IP address</td><td>the visitor's IP is in a CIDR range (e.g. <code>10.0.0.0/8</code>)</td></tr>
+</table>
+<p>A typical use: send <code>sho.rt/app</code> to the Play Store on Android, the App
+Store on iOS, and a landing page elsewhere.</p>
+
+<h2>QR codes</h2>
+<p>Every short URL serves a QR code publicly at:</p>
+<pre><code>GET /{code}/qr-code?size=300&amp;format=png|svg&amp;margin=1&amp;errorCorrection=L|M|Q|H</code></pre>
+
+<h2>robots.txt</h2>
+<p>The instance serves a <code>robots.txt</code> that disallows everything except the
+base URL and links marked <em>crawlable</em>.</p>
+  </main>
+</div>
+<footer>Shortlink documentation</footer>
+</body>
+</html>
