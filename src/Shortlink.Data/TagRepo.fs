@@ -63,7 +63,7 @@ module TagRepo =
             else
                 use conn = db.CreateConnection()
                 let! rows =
-                    conn.QueryAsync<{| ShortUrlId: int64; Name: string |}>(
+                    conn.QueryAsync<ShortUrlTagRow>(
                         """SELECT st.short_url_id, t.name FROM tags t
                            JOIN short_url_tags st ON st.tag_id = t.id
                            WHERE st.short_url_id IN @ids ORDER BY t.name""",

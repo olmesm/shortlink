@@ -23,13 +23,24 @@
     <Compile Include="Handlers/ApiApiKeys.fs" />
     <Compile Include="Handlers/ApiWebhooks.fs" />
     <Compile Include="Handlers/Health.fs" />
-    <Compile Include="Ui/Stub.fs" />
+    <Compile Include="Ui/Htmx.fs" />
+    <Compile Include="Ui/Charts.fs" />
+    <Compile Include="Ui/Layout.fs" />
+    <Compile Include="Ui/Auth.fs" />
+    <Compile Include="Ui/ShortUrlsUi.fs" />
+    <Compile Include="Ui/VisitsUi.fs" />
+    <Compile Include="Ui/TagsUi.fs" />
+    <Compile Include="Ui/DomainsUi.fs" />
+    <Compile Include="Ui/ApiKeysUi.fs" />
+    <Compile Include="Ui/UsersUi.fs" />
+    <Compile Include="Ui/WebhooksUi.fs" />
+    <Compile Include="Ui/OverviewUi.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

@@ -141,3 +141,12 @@ type WebhookDeliveryRow =
 
 [<CLIMutable>]
 type CountRow = { Label: string option; Count: int64 }
+
+[<CLIMutable>]
+type ShortUrlTagRow = { ShortUrlId: int64; Name: string }
+
+[<CLIMutable>]
+type IdUrlRow = { Id: int64; LongUrl: string }
+
+[<CLIMutable>]
+type IdIpRow = { Id: int64; RemoteIp: string }

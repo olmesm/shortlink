@@ -98,7 +98,7 @@ module VisitRepo =
             use conn = db.CreateConnection()
             let f = match db.Dialect with Sqlite -> "0" | Postgres -> "FALSE"
             let! rows =
-                conn.QueryAsync<{| Id: int64; RemoteIp: string |}>(
+                conn.QueryAsync<IdIpRow>(
                     $"""SELECT id, remote_ip FROM visits
                         WHERE geo_resolved = {f} AND remote_ip IS NOT NULL
                         ORDER BY id LIMIT @limit""",

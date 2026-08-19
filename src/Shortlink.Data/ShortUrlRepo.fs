@@ -223,7 +223,7 @@ module ShortUrlRepo =
         task {
             use conn = db.CreateConnection()
             let! rows =
-                conn.QueryAsync<{| Id: int64; LongUrl: string |}>(
+                conn.QueryAsync<IdUrlRow>(
                     """SELECT id, long_url FROM short_urls
                        WHERE title IS NULL ORDER BY id DESC LIMIT @limit""",
                     {| limit = limit |})
