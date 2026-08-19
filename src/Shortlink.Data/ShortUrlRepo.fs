@@ -267,17 +267,18 @@ module ShortUrlRepo =
             | _ -> ()
 
             if not filters.Tags.IsEmpty then
-                p.Add("tags", filters.Tags)
+                p.Add("tags", List.toArray filters.Tags)
+                let tagsIn = db.InList("t.name", "@tags")
                 if filters.TagsMatchAll then
                     p.Add("tagCount", filters.Tags.Length)
                     conditions.Add(
-                        """(SELECT COUNT(DISTINCT t.name) FROM short_url_tags st
+                        $"""(SELECT COUNT(DISTINCT t.name) FROM short_url_tags st
                             JOIN tags t ON t.id = st.tag_id
-                            WHERE st.short_url_id = su.id AND t.name IN @tags) = @tagCount""")
+                            WHERE st.short_url_id = su.id AND {tagsIn}) = @tagCount""")
                 else
                     conditions.Add(
-                        """EXISTS (SELECT 1 FROM short_url_tags st JOIN tags t ON t.id = st.tag_id
-                                   WHERE st.short_url_id = su.id AND t.name IN @tags)""")
+                        $"""EXISTS (SELECT 1 FROM short_url_tags st JOIN tags t ON t.id = st.tag_id
+                                   WHERE st.short_url_id = su.id AND {tagsIn})""")
 
             match filters.StartDate with
             | Some d ->
@@ -372,11 +373,12 @@ module ShortUrlRepo =
             if ruleRows.IsEmpty then
                 return []
             else
+                let inClause = db.InList("rule_id", "@ids")
                 let! condRows =
                     conn.QueryAsync<RedirectConditionRow>(
-                        """SELECT id, rule_id, cond_type, match_key, match_value
-                           FROM redirect_conditions WHERE rule_id IN @ids""",
-                        {| ids = ruleRows |> List.map (fun r -> r.Id) |})
+                        $"""SELECT id, rule_id, cond_type, match_key, match_value
+                           FROM redirect_conditions WHERE {inClause}""",
+                        {| ids = ruleRows |> List.map (fun r -> r.Id) |> List.toArray |})
                 let condsByRule =
                     condRows
                     |> Seq.groupBy (fun c -> c.RuleId)

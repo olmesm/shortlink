@@ -40,6 +40,14 @@ type Db =
     member this.ILike(column: string, param: string) =
         $"lower({column}) LIKE lower({param})"
 
+    /// Membership test against an array parameter. On SQLite Dapper expands
+    /// "IN @p"; Npgsql instead binds arrays natively, so Postgres needs ANY().
+    /// Always pass the parameter as an array, not an F# list.
+    member this.InList(column: string, param: string) =
+        match this.Dialect with
+        | Sqlite -> $"{column} IN {param}"
+        | Postgres -> $"{column} = ANY({param})"
+
 module private TypeHandlers =
 
     /// Store/read DateTime as UTC; parses SQLite TEXT values invariantly.

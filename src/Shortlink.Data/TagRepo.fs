@@ -19,9 +19,10 @@ module TagRepo =
                             "INSERT INTO tags (name) VALUES (@name) ON CONFLICT (name) DO NOTHING",
                             {| name = name |})
                     ()
+                let inClause = db.InList("name", "@names")
                 let! rows =
                     conn.QueryAsync<TagRow>(
-                        "SELECT id, name FROM tags WHERE name IN @names", {| names = names |})
+                        $"SELECT id, name FROM tags WHERE {inClause}", {| names = List.toArray names |})
                 let byName = rows |> Seq.map (fun t -> t.Name, t.Id) |> Map.ofSeq
                 return names |> List.choose byName.TryFind
         }
@@ -62,12 +63,13 @@ module TagRepo =
                 return Map.empty
             else
                 use conn = db.CreateConnection()
+                let inClause = db.InList("st.short_url_id", "@ids")
                 let! rows =
                     conn.QueryAsync<ShortUrlTagRow>(
-                        """SELECT st.short_url_id, t.name FROM tags t
+                        $"""SELECT st.short_url_id, t.name FROM tags t
                            JOIN short_url_tags st ON st.tag_id = t.id
-                           WHERE st.short_url_id IN @ids ORDER BY t.name""",
-                        {| ids = shortUrlIds |})
+                           WHERE {inClause} ORDER BY t.name""",
+                        {| ids = List.toArray shortUrlIds |})
                 return
                     rows
                     |> Seq.groupBy (fun r -> r.ShortUrlId)
@@ -128,7 +130,8 @@ module TagRepo =
                 return 0
             else
                 use conn = db.CreateConnection()
-                return! conn.ExecuteAsync("DELETE FROM tags WHERE name IN @names", {| names = names |})
+                let inClause = db.InList("name", "@names")
+                return! conn.ExecuteAsync($"DELETE FROM tags WHERE {inClause}", {| names = List.toArray names |})
         }
 
     let exists (db: Db) (name: string) : Task<bool> =
