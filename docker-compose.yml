@@ -1,0 +1,37 @@
+# Default: single container with an embedded SQLite database in a volume.
+# For PostgreSQL, start with the "postgres" profile:
+#   docker compose --profile postgres up
+# and point SHORTLINK_DB_* at the db service as shown below.
+services:
+  shortlink:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      SHORTLINK_DEFAULT_DOMAIN: "localhost:8080"
+      SHORTLINK_INITIAL_ADMIN_USERNAME: "admin"
+      # Set a real password before first start; otherwise one is generated
+      # and printed to the container log.
+      # SHORTLINK_INITIAL_ADMIN_PASSWORD: "change-me"
+      # SHORTLINK_GEOLITE_LICENSE_KEY: ""     # enables visit geolocation
+      # --- PostgreSQL instead of SQLite ---
+      # SHORTLINK_DB_DRIVER: "postgres"
+      # SHORTLINK_DB_CONNECTION: "Host=db;Database=shortlink;Username=shortlink;Password=shortlink"
+    volumes:
+      - shortlink-data:/data
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: shortlink
+      POSTGRES_USER: shortlink
+      POSTGRES_PASSWORD: shortlink
+    volumes:
+      - shortlink-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  shortlink-data:
+  shortlink-pgdata:
