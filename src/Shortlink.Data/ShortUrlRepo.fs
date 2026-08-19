@@ -156,6 +156,17 @@ module ShortUrlRepo =
             return Seq.tryHead rows
         }
 
+
+    let tryFindByLongUrl (db: Db) (domainId: int64) (longUrl: string) : Task<ShortUrlDetail option> =
+        task {
+            use conn = db.CreateConnection()
+            let! rows =
+                conn.QueryAsync<ShortUrlDetail>(
+                    detailSelect db + " WHERE su.domain_id = @domainId AND su.long_url = @longUrl ORDER BY su.id LIMIT 1",
+                    {| domainId = domainId; longUrl = longUrl |})
+            return Seq.tryHead rows
+        }
+
     let tryGetDetailById (db: Db) (id: int64) : Task<ShortUrlDetail option> =
         task {
             use conn = db.CreateConnection()
