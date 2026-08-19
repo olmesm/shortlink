@@ -213,22 +213,47 @@ retried with exponential backoff (up to 6 attempts) and survive restarts.
 
 ```
 src/
-  Shortlink.Core/   pure domain: types, short codes, validation, redirect
-                    rule engine, IP anonymization
+  Shortlink.Core/   pure domain: constrained types (LongUrl, ShortCode,
+                    TagName, DomainAuthority, typed ids), the ShortUrlSpec /
+                    ShortUrlEdit smart constructors, Lifetime invariants,
+                    redirect rule engine, IP anonymization
   Shortlink.Data/   Dapper repositories with dialect-aware SQL
-                    (SQLite + PostgreSQL), forward-only migrations
+                    (SQLite + PostgreSQL), forward-only migrations,
+                    transactional writes for multi-step operations
   Shortlink.Web/    Falco app: redirect hot path, REST API, htmx dashboard,
-                    background workers (geolocation, GeoLite2 refresh,
-                    title resolution, webhook delivery)
+                    typed domain events, background workers (event fan-out,
+                    geolocation, GeoLite2 refresh, title resolution,
+                    webhook delivery)
 tests/
   Shortlink.Tests/  xUnit: unit tests + full-stack integration tests on
                     an in-memory TestServer
 e2e/                Playwright browser tests driving the dashboard
 ```
 
-The redirect hot path does one indexed lookup, evaluates redirect rules in
-memory, records the raw visit, and answers; geolocation and webhook delivery
-happen on background workers.
+The design follows the functional-core / imperative-shell style with
+domain modeling in the Wlaschin ("Domain Modeling Made Functional") vein:
+
+- **Parse, don't validate.** Raw input (JSON bodies, form fields, env vars)
+  is parsed once into constrained types — `LongUrl`, `ShortCode`, `TagName`,
+  `DomainAuthority` — whose constructors are private, so an unvalidated
+  value cannot reach a repository.
+- **One home per invariant.** `ShortUrlSpec.create` / `ShortUrlEdit.create`
+  enforce every creation/edit rule (`maxVisits > 0`,
+  `validSince < validUntil`, valid status codes, tag rules); the REST API
+  and the dashboard both go through them, so the entry points cannot drift.
+- **Typed everything at boundaries.** `ShortUrlId`/`DomainId`/… prevent id
+  transposition; API-key roles parse fail-closed (an unknown stored role is
+  an invalid key, never a default admin); repository errors are DUs, not
+  strings to grep.
+- **Errors as values.** `Result` + FsToolkit's `result`/`taskResult`
+  computation expressions end-to-end; exceptions only at the persistence
+  edge, translated immediately (e.g. duplicate key → `SlugInUse`).
+- **Atomic writes.** A short URL and its tag links are inserted in one
+  transaction; rules and tag replacements likewise.
+- **Events off the hot path.** The redirect path does one indexed lookup,
+  evaluates rules in memory, records the raw visit, and answers; typed
+  `DomainEvent`s go onto a channel, and workers handle geolocation, webhook
+  fan-out and delivery.
 
 Notes:
 

@@ -20,7 +20,7 @@ let ``device detection`` (ua: string) (expected: string) =
 
 [<Fact>]
 let ``missing user agent counts as desktop`` () =
-    Assert.Equal(Desktop, RedirectRules.detectDevice None)
+    Assert.Equal(Device.Desktop, RedirectRules.detectDevice None)
 
 [<Theory>]
 [<InlineData("en", "en-GB,en;q=0.9", true)>]
@@ -36,10 +36,10 @@ let ``first matching rule by priority wins`` () =
     let rules =
         [ { Priority = 2
             LongUrl = "https://example.com/second"
-            Conditions = [ DeviceIs Android ] }
+            Conditions = [ DeviceIs Device.Android ] }
           { Priority = 1
             LongUrl = "https://example.com/first"
-            Conditions = [ DeviceIs Android ] } ]
+            Conditions = [ DeviceIs Device.Android ] } ]
     let v = visitor (Some "Android phone") None [] None
     Assert.Equal("https://example.com/first", RedirectRules.resolveTarget "https://example.com/default" rules v)
 
@@ -48,7 +48,7 @@ let ``all conditions of a rule must match`` () =
     let rules =
         [ { Priority = 1
             LongUrl = "https://example.com/match"
-            Conditions = [ DeviceIs Android; QueryParamIs("src", "mail") ] } ]
+            Conditions = [ DeviceIs Device.Android; QueryParamIs("src", "mail") ] } ]
     let androidNoParam = visitor (Some "Android") None [] None
     let androidWithParam = visitor (Some "Android") None [ "src", "mail" ] None
     Assert.Equal("https://example.com/default", RedirectRules.resolveTarget "https://example.com/default" rules androidNoParam)
@@ -59,7 +59,7 @@ let ``mobile matches android and ios`` () =
     let rules =
         [ { Priority = 1
             LongUrl = "https://example.com/mobile"
-            Conditions = [ DeviceIs Mobile ] } ]
+            Conditions = [ DeviceIs Device.Mobile ] } ]
     let android = visitor (Some "Android") None [] None
     let iphone = visitor (Some "iPhone") None [] None
     let desktop = visitor (Some "Macintosh") None [] None

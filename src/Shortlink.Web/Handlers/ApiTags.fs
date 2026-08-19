@@ -6,12 +6,12 @@ open Shortlink.Core
 open Shortlink.Data
 open Shortlink.Web
 
-type RenameTagBody = { oldName: string; newName: string }
+type RenameTagBody = { OldName: string; NewName: string }
 
 module ApiTags =
 
     /// GET /rest/v1/tags?withStats=true&searchTerm=&page=&itemsPerPage=
-    let list (_key: ApiKeyRow) : HttpHandler =
+    let list (_key: AuthenticatedKey) : HttpHandler =
         fun ctx ->
             task {
                 let db = svc<Db> ctx
@@ -24,9 +24,9 @@ module ApiTags =
                     let dto =
                         Api.pageDto
                             (fun (t: TagStatsRow) ->
-                                {| tag = t.Name
-                                   shortUrlsCount = t.ShortUrlCount
-                                   visitsCount = t.VisitCount |})
+                                {| Tag = t.Name
+                                   ShortUrlsCount = t.ShortUrlCount
+                                   VisitsCount = t.VisitCount |})
                             result
                     return! Json.respond dto ctx
                 else
@@ -36,24 +36,26 @@ module ApiTags =
             :> Task
 
     /// PUT /rest/v1/tags — rename
-    let rename (_key: ApiKeyRow) : HttpHandler =
+    let rename (_key: AuthenticatedKey) : HttpHandler =
         Api.withJson<RenameTagBody> (fun body ->
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    match Validation.normalizeTag body.newName with
+                    match TagName.create body.NewName with
                     | Error e -> return! Problems.badRequest e ctx
                     | Ok newName ->
-                        let! result = TagRepo.rename db body.oldName newName
+                        let! result = TagRepo.rename db body.OldName newName
                         match result with
-                        | Ok() -> return! Json.respond {| oldName = body.oldName; newName = newName |} ctx
-                        | Error e when e.Contains "was not found" -> return! Problems.notFound e ctx
-                        | Error e -> return! Problems.conflict "tag-conflict" e ctx
+                        | Ok() -> return! Json.respond {| OldName = body.OldName; NewName = newName.Value |} ctx
+                        | Error(TagRenameError.TagNotFound name) ->
+                            return! Problems.notFound $"Tag '{name}' was not found." ctx
+                        | Error(TagRenameError.NameTaken name) ->
+                            return! Problems.conflict "tag-conflict" $"A tag named '{name}' already exists." ctx
                 }
                 :> Task)
 
     /// DELETE /rest/v1/tags?tags[]=a&tags[]=b (also accepts tags=a,b)
-    let delete (_key: ApiKeyRow) : HttpHandler =
+    let delete (_key: AuthenticatedKey) : HttpHandler =
         fun ctx ->
             task {
                 let db = svc<Db> ctx
@@ -67,12 +69,12 @@ module ApiTags =
                     return! Problems.badRequest "Provide at least one tag to delete via ?tags[]=." ctx
                 else
                     let! deleted = TagRepo.delete db tags
-                    return! Json.respond {| deletedTags = deleted |} ctx
+                    return! Json.respond {| DeletedTags = deleted |} ctx
             }
             :> Task
 
     /// GET /rest/v1/tags/{tag}/visits
-    let visits (_key: ApiKeyRow) : HttpHandler =
+    let visits (_key: AuthenticatedKey) : HttpHandler =
         fun ctx ->
             task {
                 let db = svc<Db> ctx

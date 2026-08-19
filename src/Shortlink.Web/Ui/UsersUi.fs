@@ -3,6 +3,7 @@ namespace Shortlink.Web.Ui
 open System.Threading.Tasks
 open Falco
 open Falco.Markup
+open Shortlink.Core
 open Shortlink.Data
 open Shortlink.Web
 
@@ -36,8 +37,8 @@ module UsersUi =
                               Elem.tbody
                                   []
                                   [ for u in users do
-                                        let isSelf = u.Id = currentUser.Id
-                                        let isLastAdmin = u.Role = "admin" && adminCount <= 1L
+                                        let isSelf = UserId u.Id = currentUser.Id
+                                        let isLastAdmin = u.Role = UserRole.Admin.Slug && adminCount <= 1L
                                         Elem.tr
                                             []
                                             [ Elem.td
@@ -126,7 +127,8 @@ module UsersUi =
                     let! form = Request.getForm ctx
                     let username = form.GetString("username", "").Trim()
                     let password = form.GetString("password", "")
-                    let role = if form.GetString("role", "user") = "admin" then "admin" else "user"
+                    let role =
+                        if form.GetString("role", "user") = "admin" then UserRole.Admin else UserRole.Regular
                     if username = "" || password.Length < 8 then
                         let! content =
                             page db user (Some(Layout.alertError "Username is required and the password needs at least 8 characters."))
@@ -148,13 +150,16 @@ module UsersUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = UserId((Request.getRoute ctx).GetInt64 "id")
                     let! form = Request.getForm ctx
-                    let role = if form.GetString("role", "user") = "admin" then "admin" else "user"
+                    let role =
+                        if form.GetString("role", "user") = "admin" then UserRole.Admin else UserRole.Regular
                     let! target = UserRepo.tryFindById db id
                     let! adminCount = UserRepo.countAdmins db
+                    let demotingLastAdmin (u: UserRow) =
+                        u.Role = UserRole.Admin.Slug && role = UserRole.Regular && adminCount <= 1L
                     match target with
-                    | Some u when not (u.Role = "admin" && role = "user" && adminCount <= 1L) ->
+                    | Some u when not (demotingLastAdmin u) ->
                         let! _ = UserRepo.updateRole db id role
                         ()
                     | _ -> ()
@@ -168,7 +173,7 @@ module UsersUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = UserId((Request.getRoute ctx).GetInt64 "id")
                     let! form = Request.getForm ctx
                     let password = form.GetString("password", "")
                     if password.Length >= 8 then
@@ -186,11 +191,11 @@ module UsersUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = UserId((Request.getRoute ctx).GetInt64 "id")
                     let! target = UserRepo.tryFindById db id
                     let! adminCount = UserRepo.countAdmins db
                     match target with
-                    | Some u when u.Id <> user.Id && not (u.Role = "admin" && adminCount <= 1L) ->
+                    | Some u when UserId u.Id <> user.Id && not (u.Role = UserRole.Admin.Slug && adminCount <= 1L) ->
                         let! _ = UserRepo.delete db id
                         ()
                     | _ -> ()

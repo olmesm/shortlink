@@ -5,22 +5,22 @@ open Shortlink.Core
 
 [<Fact>]
 let ``generated codes have the requested length`` () =
-    Assert.Equal(5, (ShortCode.generate 5).Length)
-    Assert.Equal(12, (ShortCode.generate 12).Length)
+    Assert.Equal(5, (ShortCode.generate 5).Value.Length)
+    Assert.Equal(12, (ShortCode.generate 12).Value.Length)
 
 [<Fact>]
 let ``generated codes never go below the minimum length`` () =
-    Assert.Equal(ShortCode.minLength, (ShortCode.generate 1).Length)
+    Assert.Equal(ShortCode.minLength, (ShortCode.generate 1).Value.Length)
 
 [<Fact>]
 let ``generated codes only use the alphabet`` () =
     for _ in 1..50 do
         let code = ShortCode.generate 8
-        Assert.All(code, fun c -> Assert.Contains(c, ShortCode.alphabet))
+        Assert.All(code.Value, fun c -> Assert.Contains(c, ShortCode.alphabet))
 
 [<Fact>]
 let ``generated codes are (overwhelmingly) unique`` () =
-    let codes = [ for _ in 1..1000 -> ShortCode.generate 8 ]
+    let codes = [ for _ in 1..1000 -> (ShortCode.generate 8).Value ]
     Assert.Equal(1000, (List.distinct codes).Length)
 
 [<Theory>]
@@ -29,7 +29,7 @@ let ``generated codes are (overwhelmingly) unique`` () =
 [<InlineData("docs/intro")>]
 [<InlineData("a.b~c+d")>]
 let ``valid slugs are accepted`` (slug: string) =
-    match ShortCode.validateSlug slug with
+    match ShortCode.ofSlug slug with
     | Ok _ -> ()
     | Error e -> failwith e
 
@@ -41,10 +41,12 @@ let ``valid slugs are accepted`` (slug: string) =
 [<InlineData("a//b")>]
 [<InlineData("per%cent")>]
 let ``invalid slugs are rejected`` (slug: string) =
-    match ShortCode.validateSlug slug with
-    | Ok s -> failwith $"expected rejection, got '{s}'"
+    match ShortCode.ofSlug slug with
+    | Ok s -> failwith $"expected rejection, got '{s.Value}'"
     | Error _ -> ()
 
 [<Fact>]
 let ``slugs are trimmed of surrounding slashes`` () =
-    Assert.Equal(Ok "abc", ShortCode.validateSlug "/abc/")
+    match ShortCode.ofSlug "/abc/" with
+    | Ok code -> Assert.Equal("abc", code.Value)
+    | Error e -> failwith e

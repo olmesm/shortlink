@@ -19,13 +19,26 @@ module Di =
     let svc<'T> (ctx: HttpContext) : 'T =
         ctx.RequestServices.GetRequiredService<'T>()
 
+[<RequireQualifiedAccess>]
 module Passwords =
-    let hash (password: string) : string =
-        BCrypt.Net.BCrypt.HashPassword(password)
+    let hash (password: string) : string = BCrypt.Net.BCrypt.HashPassword(password)
 
     let verify (password: string) (hash: string) : bool =
-        try BCrypt.Net.BCrypt.Verify(password, hash) with _ -> false
+        try
+            BCrypt.Net.BCrypt.Verify(password, hash)
+        with _ ->
+            false
 
+/// An API key that has been authenticated for the current request: the stored
+/// row plus its successfully-parsed role. A key whose stored role cannot be
+/// parsed never reaches a handler — unknown roles are rejected, not defaulted.
+type AuthenticatedKey =
+    { Row: ApiKeyRow
+      Role: ApiKeyRole }
+
+    member this.Id = ApiKeyId this.Row.Id
+
+[<RequireQualifiedAccess>]
 module ApiKeys =
 
     /// Generate a new plaintext API key. Only its hash is stored.
@@ -34,19 +47,24 @@ module ApiKeys =
         "sl_" + Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 
     let hash (key: string) : string =
-        SHA256.HashData(Encoding.UTF8.GetBytes(key)) |> Convert.ToHexString |> fun s -> s.ToLowerInvariant()
-
-    let roleOf (row: ApiKeyRow) : ApiKeyRole =
-        match row.Role, row.DomainId with
-        | "author", _ -> AuthorKey
-        | "domain", Some domainId -> DomainKey domainId
-        | _ -> AdminKey
+        SHA256.HashData(Encoding.UTF8.GetBytes(key))
+        |> Convert.ToHexString
+        |> fun s -> s.ToLowerInvariant()
 
     let isUsable (row: ApiKeyRow) (now: DateTime) : bool =
         row.Enabled
         && (match row.ExpiresAt with
-            | Some exp -> exp > now
+            | Some expiry -> expiry > now
             | None -> true)
+
+    /// Authenticate a stored key row: it must be enabled, unexpired and carry
+    /// a parseable role.
+    let authenticate (now: DateTime) (row: ApiKeyRow) : AuthenticatedKey option =
+        if isUsable row now then
+            ApiKeyRole.OfStored(row.Role, row.DomainId)
+            |> Option.map (fun role -> { Row = row; Role = role })
+        else
+            None
 
 module ApiAuth =
 
@@ -55,6 +73,7 @@ module ApiAuth =
             match ctx.Request.Headers.TryGetValue name with
             | true, values when values.Count > 0 -> Some(values.[0])
             | _ -> None
+
         match header "X-Api-Key" with
         | Some k when k <> "" -> Some k
         | _ ->
@@ -63,28 +82,30 @@ module ApiAuth =
                 Some(auth.Substring(7).Trim())
             | _ -> None
 
-    /// Authenticate the request by API key and pass the key row to the handler.
-    let requireApiKey (handler: ApiKeyRow -> HttpHandler) : HttpHandler =
+    /// Authenticate the request by API key and pass the authenticated key to
+    /// the handler.
+    let requireApiKey (handler: AuthenticatedKey -> HttpHandler) : HttpHandler =
         fun ctx ->
             task {
                 match readKey ctx with
-                | None ->
-                    return! Problems.unauthorized "Expected an API key in the X-Api-Key header." ctx
+                | None -> return! Problems.unauthorized "Expected an API key in the X-Api-Key header." ctx
                 | Some key ->
                     let db = svc<Db> ctx
                     let! row = ApiKeyRepo.tryFindByHash db (ApiKeys.hash key)
-                    match row with
-                    | Some row when ApiKeys.isUsable row DateTime.UtcNow -> return! handler row ctx
-                    | _ -> return! Problems.unauthorized "The provided API key is not valid." ctx
+
+                    match row |> Option.bind (ApiKeys.authenticate DateTime.UtcNow) with
+                    | Some authenticated -> return! handler authenticated ctx
+                    | None -> return! Problems.unauthorized "The provided API key is not valid." ctx
             }
             :> Task
 
     /// Authenticate and require the admin role.
-    let requireAdminKey (handler: ApiKeyRow -> HttpHandler) : HttpHandler =
+    let requireAdminKey (handler: AuthenticatedKey -> HttpHandler) : HttpHandler =
         requireApiKey (fun key ->
-            match ApiKeys.roleOf key with
-            | AdminKey -> handler key
-            | _ -> Problems.forbidden "This operation requires an admin API key.")
+            match key.Role with
+            | ApiKeyRole.Admin -> handler key
+            | ApiKeyRole.Author
+            | ApiKeyRole.Domain _ -> Problems.forbidden "This operation requires an admin API key.")
 
 /// Cookie-based authentication for the admin dashboard.
 module UiAuth =
@@ -92,33 +113,42 @@ module UiAuth =
     let scheme = CookieAuthenticationDefaults.AuthenticationScheme
 
     type CurrentUser =
-        { Id: int64
+        { Id: UserId
           Username: string
           Role: UserRole }
 
-        member this.IsAdmin = this.Role = AdminUser
+        member this.IsAdmin = this.Role = UserRole.Admin
 
     let signIn (ctx: HttpContext) (user: UserRow) : Task =
         let claims =
             [ Claim(ClaimTypes.NameIdentifier, string user.Id)
               Claim(ClaimTypes.Name, user.Username)
               Claim(ClaimTypes.Role, user.Role) ]
+
         let identity = ClaimsIdentity(claims, scheme)
-        let props = AuthenticationProperties(IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays 14.0)
+
+        let props =
+            AuthenticationProperties(IsPersistent = true, ExpiresUtc = DateTimeOffset.UtcNow.AddDays 14.0)
+
         ctx.SignInAsync(scheme, ClaimsPrincipal(identity), props)
 
     let signOut (ctx: HttpContext) : Task = ctx.SignOutAsync(scheme)
 
     let currentUser (ctx: HttpContext) : CurrentUser option =
-        if not (isNull ctx.User) && ctx.User.Identity <> null && ctx.User.Identity.IsAuthenticated then
-            let idClaim = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)
-            let name = ctx.User.FindFirstValue(ClaimTypes.Name)
-            let role = ctx.User.FindFirstValue(ClaimTypes.Role)
-            match Int64.TryParse(idClaim), UserRole.OfSlug(if isNull role then "user" else role) with
-            | (true, id), Some role -> Some { Id = id; Username = name; Role = role }
+        match ctx.User with
+        | null -> None
+        | principal when isNull principal.Identity || not principal.Identity.IsAuthenticated -> None
+        | principal ->
+            let idClaim = principal.FindFirstValue(ClaimTypes.NameIdentifier)
+            let role = principal.FindFirstValue(ClaimTypes.Role) |> Option.ofObj |> Option.defaultValue ""
+
+            match Int64.TryParse(idClaim), UserRole.OfSlug role with
+            | (true, id), Some role ->
+                Some
+                    { Id = UserId id
+                      Username = principal.FindFirstValue(ClaimTypes.Name)
+                      Role = role }
             | _ -> None
-        else
-            None
 
     /// Require a signed-in user; redirect to the login page otherwise.
     let requireUser (handler: CurrentUser -> HttpHandler) : HttpHandler =

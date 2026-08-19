@@ -7,18 +7,19 @@ open Falco
 module Problems =
 
     type ProblemDetails =
-        { ``type``: string
-          title: string
-          detail: string
-          status: int }
+        { Type: string
+          Title: string
+          Detail: string
+          Status: int }
 
     let problem (status: int) (problemType: string) (title: string) (detail: string) : HttpHandler =
         let body =
             Json.serialize
-                { ``type`` = $"https://shortlink.dev/errors/{problemType}"
-                  title = title
-                  detail = detail
-                  status = status }
+                { Type = $"https://shortlink.dev/errors/{problemType}"
+                  Title = title
+                  Detail = detail
+                  Status = status }
+
         Response.withStatusCode status
         >> Response.ofBinary "application/problem+json; charset=utf-8" [] (Encoding.UTF8.GetBytes body)
 
@@ -28,11 +29,8 @@ module Problems =
     let unauthorized detail : HttpHandler =
         problem 401 "missing-authentication" "Authentication required" detail
 
-    let forbidden detail : HttpHandler =
-        problem 403 "forbidden" "Forbidden" detail
+    let forbidden detail : HttpHandler = problem 403 "forbidden" "Forbidden" detail
 
-    let notFound detail : HttpHandler =
-        problem 404 "not-found" "Not found" detail
+    let notFound detail : HttpHandler = problem 404 "not-found" "Not found" detail
 
-    let conflict problemType detail : HttpHandler =
-        problem 409 problemType "Conflict" detail
+    let conflict problemType detail : HttpHandler = problem 409 problemType "Conflict" detail

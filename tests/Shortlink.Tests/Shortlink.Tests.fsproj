@@ -12,6 +12,7 @@
     <Compile Include="ShortCodeTests.fs" />
     <Compile Include="ValidationTests.fs" />
     <Compile Include="AnonymizeTests.fs" />
+    <Compile Include="DomainModelTests.fs" />
     <Compile Include="RedirectRulesTests.fs" />
     <Compile Include="ApiIntegrationTests.fs" />
     <Compile Include="RedirectIntegrationTests.fs" />

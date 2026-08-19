@@ -9,13 +9,13 @@ module RedirectRules =
     /// accurate enough to drive device-condition redirect rules.
     let detectDevice (userAgent: string option) : Device =
         match userAgent with
-        | None -> Desktop
+        | None -> Device.Desktop
         | Some ua ->
             let ua = ua.ToLowerInvariant()
-            if ua.Contains "android" then Android
-            elif ua.Contains "iphone" || ua.Contains "ipad" || ua.Contains "ipod" then Ios
-            elif ua.Contains "mobile" then Mobile
-            else Desktop
+            if ua.Contains "android" then Device.Android
+            elif ua.Contains "iphone" || ua.Contains "ipad" || ua.Contains "ipod" then Device.Ios
+            elif ua.Contains "mobile" then Device.Mobile
+            else Device.Desktop
 
     /// Does the Accept-Language header include the wanted language?
     /// Matches on the primary subtag: wanting "en" matches "en-GB"; wanting
@@ -37,7 +37,7 @@ module RedirectRules =
         | DeviceIs wanted ->
             let device = detectDevice visitor.UserAgent
             match wanted, device with
-            | Mobile, (Android | Ios | Mobile) -> true
+            | Device.Mobile, (Device.Android | Device.Ios | Device.Mobile) -> true
             | w, d -> w = d
         | LanguageIs lang -> matchesLanguage lang visitor.AcceptLanguage
         | QueryParamIs(key, value) ->

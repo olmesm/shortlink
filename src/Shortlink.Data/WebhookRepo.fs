@@ -3,12 +3,13 @@ namespace Shortlink.Data
 open System
 open System.Threading.Tasks
 open Dapper
+open Shortlink.Core
 
 module WebhookRepo =
 
     let private selectCols = "id, name, url, secret, events, enabled, created_at"
 
-    let insert (db: Db) (name: string) (url: string) (secret: string) (events: string list) : Task<WebhookRow> =
+    let insert (db: Db) (name: string) (url: string) (secret: string) (events: WebhookEvent list) : Task<WebhookRow> =
         task {
             use conn = db.CreateConnection()
             let! id =
@@ -19,7 +20,7 @@ module WebhookRepo =
                     {| name = name
                        url = url
                        secret = secret
-                       events = String.Join(",", events)
+                       events = events |> List.map (fun e -> e.Slug) |> String.concat ","
                        t = true
                        now = DateTime.UtcNow |})
             let! row =
@@ -36,20 +37,19 @@ module WebhookRepo =
         }
 
     /// Enabled webhooks subscribed to a given event.
-    let listForEvent (db: Db) (eventSlug: string) : Task<WebhookRow list> =
+    let listForEvent (db: Db) (event: WebhookEvent) : Task<WebhookRow list> =
         task {
             use conn = db.CreateConnection()
-            let t = match db.Dialect with Sqlite -> "1" | Postgres -> "TRUE"
             let! rows =
                 conn.QueryAsync<WebhookRow>(
-                    $"SELECT {selectCols} FROM webhooks WHERE enabled = {t}")
+                    $"SELECT {selectCols} FROM webhooks WHERE enabled = {db.BoolLiteral true}")
             return
                 rows
-                |> Seq.filter (fun w -> w.Events.Split(',') |> Array.exists (fun e -> e.Trim() = eventSlug))
+                |> Seq.filter (fun w -> w.Events.Split(',') |> Array.exists (fun e -> e.Trim() = event.Slug))
                 |> List.ofSeq
         }
 
-    let setEnabled (db: Db) (id: int64) (enabled: bool) : Task<bool> =
+    let setEnabled (db: Db) (WebhookId id) (enabled: bool) : Task<bool> =
         task {
             use conn = db.CreateConnection()
             let! affected =
@@ -59,7 +59,7 @@ module WebhookRepo =
             return affected > 0
         }
 
-    let delete (db: Db) (id: int64) : Task<bool> =
+    let delete (db: Db) (WebhookId id) : Task<bool> =
         task {
             use conn = db.CreateConnection()
             let! affected = conn.ExecuteAsync("DELETE FROM webhooks WHERE id = @id", {| id = id |})
@@ -68,14 +68,14 @@ module WebhookRepo =
 
     // ---- Delivery queue ----
 
-    let enqueueDelivery (db: Db) (webhookId: int64) (eventSlug: string) (payload: string) : Task<unit> =
+    let enqueueDelivery (db: Db) (WebhookId webhookId) (event: WebhookEvent) (payload: string) : Task<unit> =
         task {
             use conn = db.CreateConnection()
             let! _ =
                 conn.ExecuteAsync(
                     """INSERT INTO webhook_deliveries (webhook_id, event, payload, attempts, next_attempt_at, status, created_at)
                        VALUES (@webhookId, @event, @payload, 0, @now, 'pending', @now)""",
-                    {| webhookId = webhookId; event = eventSlug; payload = payload; now = DateTime.UtcNow |})
+                    {| webhookId = webhookId; event = event.Slug; payload = payload; now = DateTime.UtcNow |})
             return ()
         }
 

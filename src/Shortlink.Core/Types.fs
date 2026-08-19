@@ -3,6 +3,7 @@ namespace Shortlink.Core
 open System
 
 /// HTTP status used when redirecting a short URL to its long URL.
+[<RequireQualifiedAccess>]
 type RedirectStatus =
     | MovedPermanently
     | Found
@@ -11,20 +12,21 @@ type RedirectStatus =
 
     member this.Code =
         match this with
-        | MovedPermanently -> 301
-        | Found -> 302
-        | TemporaryRedirect -> 307
-        | PermanentRedirect -> 308
+        | RedirectStatus.MovedPermanently -> 301
+        | RedirectStatus.Found -> 302
+        | RedirectStatus.TemporaryRedirect -> 307
+        | RedirectStatus.PermanentRedirect -> 308
 
     static member OfCode(code: int) =
         match code with
-        | 301 -> Some MovedPermanently
-        | 302 -> Some Found
-        | 307 -> Some TemporaryRedirect
-        | 308 -> Some PermanentRedirect
+        | 301 -> Some RedirectStatus.MovedPermanently
+        | 302 -> Some RedirectStatus.Found
+        | 307 -> Some RedirectStatus.TemporaryRedirect
+        | 308 -> Some RedirectStatus.PermanentRedirect
         | _ -> None
 
 /// Device family detected from a visitor's user agent, used by redirect rules.
+[<RequireQualifiedAccess>]
 type Device =
     | Android
     | Ios
@@ -33,24 +35,25 @@ type Device =
 
     member this.Slug =
         match this with
-        | Android -> "android"
-        | Ios -> "ios"
-        | Desktop -> "desktop"
-        | Mobile -> "mobile"
+        | Device.Android -> "android"
+        | Device.Ios -> "ios"
+        | Device.Desktop -> "desktop"
+        | Device.Mobile -> "mobile"
 
     static member OfSlug(s: string) =
         match s with
         | null -> None
         | s ->
             match s.Trim().ToLowerInvariant() with
-            | "android" -> Some Android
-            | "ios" -> Some Ios
-            | "desktop" -> Some Desktop
-            | "mobile" -> Some Mobile
+            | "android" -> Some Device.Android
+            | "ios" -> Some Device.Ios
+            | "desktop" -> Some Device.Desktop
+            | "mobile" -> Some Device.Mobile
             | _ -> None
 
 /// A single condition inside a redirect rule. All conditions of a rule must
-/// match for the rule's target URL to be used.
+/// match for the rule's target URL to be used. Case names are descriptive
+/// enough to stay unqualified.
 type RuleCondition =
     | DeviceIs of Device
     | LanguageIs of string
@@ -73,6 +76,7 @@ type VisitorContext =
 
 /// Kind of visit being tracked. Anything except ValidShortUrl is an "orphan"
 /// visit: traffic that reached the service but not an active short URL.
+[<RequireQualifiedAccess>]
 type VisitType =
     | ValidShortUrl
     | OrphanBaseUrl
@@ -81,47 +85,66 @@ type VisitType =
 
     member this.Slug =
         match this with
-        | ValidShortUrl -> "valid"
-        | OrphanBaseUrl -> "base_url"
-        | OrphanInvalidShortUrl -> "invalid_short_url"
-        | OrphanRegular404 -> "regular_404"
+        | VisitType.ValidShortUrl -> "valid"
+        | VisitType.OrphanBaseUrl -> "base_url"
+        | VisitType.OrphanInvalidShortUrl -> "invalid_short_url"
+        | VisitType.OrphanRegular404 -> "regular_404"
 
     member this.IsOrphan =
         match this with
-        | ValidShortUrl -> false
+        | VisitType.ValidShortUrl -> false
         | _ -> true
 
     static member OfSlug(s: string) =
         match s with
-        | "valid" -> Some ValidShortUrl
-        | "base_url" -> Some OrphanBaseUrl
-        | "invalid_short_url" -> Some OrphanInvalidShortUrl
-        | "regular_404" -> Some OrphanRegular404
+        | "valid" -> Some VisitType.ValidShortUrl
+        | "base_url" -> Some VisitType.OrphanBaseUrl
+        | "invalid_short_url" -> Some VisitType.OrphanInvalidShortUrl
+        | "regular_404" -> Some VisitType.OrphanRegular404
         | _ -> None
 
-/// Access level attached to an API key.
+/// Access level attached to an API key. Parsing is partial on purpose: an
+/// unrecognized stored role must be rejected, never defaulted.
+[<RequireQualifiedAccess>]
 type ApiKeyRole =
-    | AdminKey
-    | AuthorKey
-    | DomainKey of domainId: int64
-
-/// Dashboard user role.
-type UserRole =
-    | AdminUser
-    | RegularUser
+    | Admin
+    | Author
+    | Domain of DomainId
 
     member this.Slug =
         match this with
-        | AdminUser -> "admin"
-        | RegularUser -> "user"
+        | ApiKeyRole.Admin -> "admin"
+        | ApiKeyRole.Author -> "author"
+        | ApiKeyRole.Domain _ -> "domain"
+
+    /// Reconstruct a role from its stored representation. Returns None for
+    /// unknown role strings and for a domain role missing its domain id.
+    static member OfStored(slug: string, domainId: int64 option) =
+        match slug, domainId with
+        | "admin", _ -> Some ApiKeyRole.Admin
+        | "author", _ -> Some ApiKeyRole.Author
+        | "domain", Some id -> Some(ApiKeyRole.Domain(DomainId id))
+        | _ -> None
+
+/// Dashboard user role.
+[<RequireQualifiedAccess>]
+type UserRole =
+    | Admin
+    | Regular
+
+    member this.Slug =
+        match this with
+        | UserRole.Admin -> "admin"
+        | UserRole.Regular -> "user"
 
     static member OfSlug(s: string) =
         match s with
-        | "admin" -> Some AdminUser
-        | "user" -> Some RegularUser
+        | "admin" -> Some UserRole.Admin
+        | "user" -> Some UserRole.Regular
         | _ -> None
 
 /// Events that webhooks can subscribe to.
+[<RequireQualifiedAccess>]
 type WebhookEvent =
     | UrlCreated
     | VisitRecorded
@@ -129,34 +152,50 @@ type WebhookEvent =
 
     member this.Slug =
         match this with
-        | UrlCreated -> "url.created"
-        | VisitRecorded -> "visit.recorded"
-        | OrphanVisitRecorded -> "orphan_visit.recorded"
+        | WebhookEvent.UrlCreated -> "url.created"
+        | WebhookEvent.VisitRecorded -> "visit.recorded"
+        | WebhookEvent.OrphanVisitRecorded -> "orphan_visit.recorded"
 
     static member OfSlug(s: string) =
         match s with
-        | "url.created" -> Some UrlCreated
-        | "visit.recorded" -> Some VisitRecorded
-        | "orphan_visit.recorded" -> Some OrphanVisitRecorded
+        | "url.created" -> Some WebhookEvent.UrlCreated
+        | "visit.recorded" -> Some WebhookEvent.VisitRecorded
+        | "orphan_visit.recorded" -> Some WebhookEvent.OrphanVisitRecorded
         | _ -> None
 
-    static member All = [ UrlCreated; VisitRecorded; OrphanVisitRecorded ]
+    static member All =
+        [ WebhookEvent.UrlCreated; WebhookEvent.VisitRecorded; WebhookEvent.OrphanVisitRecorded ]
 
 /// Why a short URL, although it exists, refuses to redirect right now.
+[<RequireQualifiedAccess>]
 type ExpirationReason =
     | NotYetValid
     | NoLongerValid
     | MaxVisitsReached
 
-module DomainErrors =
+/// Everything that can go wrong creating (or editing) a short URL.
+[<RequireQualifiedAccess>]
+type ShortUrlError =
+    | InvalidLongUrl of string
+    | InvalidSlug of string
+    | InvalidTag of string
+    | InvalidLifetime of string
+    | InvalidRedirectStatus of int
+    | SlugInUse of slug: string * domain: string
+    | UnknownDomain of string
+    | CodeGenerationExhausted
 
-    type CreateShortUrlError =
-        | InvalidLongUrl of string
-        | InvalidSlug of string
-        | SlugInUse of slug: string * domain: string
-        | UnknownDomain of string
-        | CodeGenerationExhausted
-
-    type EditShortUrlError =
-        | ShortUrlNotFound of code: string * domain: string option
-        | EditInvalidUrl of string
+    /// Human-readable message, for UI banners and problem details.
+    member this.Message =
+        match this with
+        | ShortUrlError.InvalidLongUrl m
+        | ShortUrlError.InvalidSlug m
+        | ShortUrlError.InvalidTag m
+        | ShortUrlError.InvalidLifetime m -> m
+        | ShortUrlError.InvalidRedirectStatus code ->
+            $"'{code}' is not a supported redirect status. Use 301, 302, 307 or 308."
+        | ShortUrlError.SlugInUse(slug, domain) ->
+            $"The slug '{slug}' is already in use on domain '{domain}'."
+        | ShortUrlError.UnknownDomain m -> m
+        | ShortUrlError.CodeGenerationExhausted ->
+            "Could not find a free short code; try again or use a custom slug."

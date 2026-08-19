@@ -24,9 +24,9 @@ module Health =
                     with _ ->
                         false
                 if healthy then
-                    return! Json.respond {| status = "pass"; version = Version |} ctx
+                    return! Json.respond {| Status = "pass"; Version = Version |} ctx
                 else
                     return!
-                        (Response.withStatusCode 503 >> Json.respond {| status = "fail"; version = Version |}) ctx
+                        (Response.withStatusCode 503 >> Json.respond {| Status = "fail"; Version = Version |}) ctx
             }
             :> Task

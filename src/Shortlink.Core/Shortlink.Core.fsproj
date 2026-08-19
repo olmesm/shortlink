@@ -7,12 +7,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Ids.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="ShortCode.fs" />
     <Compile Include="Validation.fs" />
+    <Compile Include="Spec.fs" />
     <Compile Include="Anonymize.fs" />
     <Compile Include="RedirectRules.fs" />
     <Compile Include="Paging.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
   </ItemGroup>
 
 </Project>

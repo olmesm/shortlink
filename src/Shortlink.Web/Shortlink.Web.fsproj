@@ -9,6 +9,8 @@
     <Compile Include="Config.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="Problems.fs" />
+    <Compile Include="Dto.fs" />
+    <Compile Include="Events.fs" />
     <Compile Include="Security.fs" />
     <Compile Include="Background.fs" />
     <Compile Include="Tracking.fs" />
@@ -35,6 +37,7 @@
     <Compile Include="Ui/UsersUi.fs" />
     <Compile Include="Ui/WebhooksUi.fs" />
     <Compile Include="Ui/OverviewUi.fs" />
+    <Compile Include="Ui/Routes.fs" />
     <Compile Include="App.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -47,6 +50,7 @@
     <PackageReference Include="Falco" Version="5.2.0" />
     <PackageReference Include="Falco.Markup" Version="1.4.0" />
     <PackageReference Include="FSharp.SystemTextJson" Version="1.3.13" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.2.0" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="UAParser" Version="3.1.47" />
     <PackageReference Include="MaxMind.GeoIP2" Version="5.2.0" />

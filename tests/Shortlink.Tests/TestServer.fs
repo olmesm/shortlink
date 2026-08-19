@@ -8,6 +8,7 @@ open System.Text
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.TestHost
 open Microsoft.Extensions.DependencyInjection
+open Shortlink.Core
 open Shortlink.Data
 open Shortlink.Web
 
@@ -22,15 +23,17 @@ type TestApp() =
     let dbPath = Path.Combine(dataDir, "test.db")
 
     let cfg =
-        { AppConfig.fromLookup (fun _ -> None) with
-            DefaultDomain = "example.test"
-            DbDialect = Sqlite
-            ConnectionString = $"Data Source={dbPath}"
-            DataDir = dataDir
-            AutoResolveTitles = false
-            InitialAdminUsername = Some "admin"
-            InitialAdminPassword = Some "test-password-123"
-            RateLimitPerMinute = 10000 }
+        let vars =
+            Map
+                [ "DEFAULT_DOMAIN", "example.test"
+                  "DB_CONNECTION", $"Data Source={dbPath}"
+                  "DATA_DIR", dataDir
+                  "AUTO_RESOLVE_TITLES", "false"
+                  "INITIAL_ADMIN_USERNAME", "admin"
+                  "INITIAL_ADMIN_PASSWORD", "test-password-123"
+                  "RATE_LIMIT_PER_MINUTE", "10000" ]
+
+        AppConfig.fromLookup vars.TryFind
 
     let app =
         App.build cfg (fun builder -> builder.WebHost.UseTestServer() |> ignore)
@@ -43,16 +46,16 @@ type TestApp() =
     member _.CreateClient() : HttpClient = app.GetTestClient()
 
     /// Seed an API key with the given role and return the plaintext key.
-    member this.CreateApiKey(role: string, ?domainId: int64, ?name: string) =
+    member this.CreateApiKey(role: ApiKeyRole, ?name: string) =
         let plain = ApiKeys.generate ()
         let insertTask =
-            ApiKeyRepo.insert this.Db (ApiKeys.hash plain) (name |> Option.orElse (Some "test")) role domainId None
+            ApiKeyRepo.insert this.Db (ApiKeys.hash plain) (name |> Option.orElse (Some "test")) role None
         insertTask.GetAwaiter().GetResult() |> ignore
         plain
 
     member this.AdminClient() =
         let client = this.CreateClient()
-        let key = this.CreateApiKey "admin"
+        let key = this.CreateApiKey ApiKeyRole.Admin
         client.DefaultRequestHeaders.Add("X-Api-Key", key)
         client
 

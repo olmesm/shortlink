@@ -4,6 +4,7 @@ open System
 open System.Threading.Tasks
 open Falco
 open Falco.Markup
+open Shortlink.Core
 open Shortlink.Data
 open Shortlink.Web
 
@@ -129,29 +130,30 @@ module ApiKeysUi =
                         match form.GetString("name", "").Trim() with
                         | "" -> None
                         | n -> Some n
-                    let role =
-                        match form.GetString("role", "admin") with
-                        | "author" -> "author"
-                        | "domain" -> "domain"
-                        | _ -> "admin"
                     let! domain =
                         match form.GetString("domain", "") with
                         | "" -> Task.FromResult None
                         | a -> DomainRepo.tryGetByAuthority db (a.ToLowerInvariant())
+                    let role =
+                        match form.GetString("role", "admin") with
+                        | "author" -> Ok ApiKeyRole.Author
+                        | "domain" ->
+                            match domain with
+                            | Some d -> Ok(ApiKeyRole.Domain(DomainId d.Id))
+                            | None -> Error "Domain-role keys need a domain."
+                        | _ -> Ok ApiKeyRole.Admin
                     let expiresAt =
                         match form.GetString("expiresAt", "") with
                         | "" -> None
                         | v -> Handlers.Api.tryParseDate v
 
-                    if role = "domain" && domain.IsNone then
-                        let! content = page db user (Some(Layout.alertError "Domain-role keys need a domain."))
+                    match role with
+                    | Error message ->
+                        let! content = page db user (Some(Layout.alertError message))
                         return! Layout.respond user "/admin/api-keys" "API keys" content ctx
-                    else
+                    | Ok role ->
                         let plainKey = ApiKeys.generate ()
-                        let! _ =
-                            ApiKeyRepo.insert db (ApiKeys.hash plainKey) name role
-                                (if role = "domain" then domain |> Option.map (fun d -> d.Id) else None)
-                                expiresAt
+                        let! _ = ApiKeyRepo.insert db (ApiKeys.hash plainKey) name role expiresAt
                         let banner =
                             Layout.alertSuccess
                                 [ Text.raw "API key created — copy it now, it will not be shown again: "
@@ -168,9 +170,9 @@ module ApiKeysUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
-                    let! keys = ApiKeyRepo.list db
-                    match keys |> List.tryFind (fun k -> k.Id = id) with
+                    let id = ApiKeyId((Request.getRoute ctx).GetInt64 "id")
+                    let! key = ApiKeyRepo.tryGetById db id
+                    match key with
                     | Some k ->
                         let! _ = ApiKeyRepo.setEnabled db id (not k.Enabled)
                         ()
@@ -185,7 +187,7 @@ module ApiKeysUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = ApiKeyId((Request.getRoute ctx).GetInt64 "id")
                     let! _ = ApiKeyRepo.delete db id
                     return! Response.redirectTemporarily "/admin/api-keys" ctx
                 }

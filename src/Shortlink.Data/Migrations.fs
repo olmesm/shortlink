@@ -259,8 +259,8 @@ CREATE INDEX idx_webhook_deliveries_due ON webhook_deliveries(status, next_attem
 
     let private scripts (dialect: Dialect) : (int * string) list =
         match dialect with
-        | Sqlite -> [ 1, sqlite001 ]
-        | Postgres -> [ 1, postgres001 ]
+        | Dialect.Sqlite -> [ 1, sqlite001 ]
+        | Dialect.Postgres -> [ 1, postgres001 ]
 
     /// Apply all pending migrations. Safe to run on every startup.
     let run (db: Db) =

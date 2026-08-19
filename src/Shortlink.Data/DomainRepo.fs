@@ -3,6 +3,7 @@ namespace Shortlink.Data
 open System
 open System.Threading.Tasks
 open Dapper
+open Shortlink.Core
 
 [<CLIMutable>]
 type DomainStatsRow =
@@ -22,7 +23,7 @@ module DomainRepo =
         "id, authority, base_url_redirect, regular_404_redirect, invalid_short_url_redirect, is_default, created_at"
 
     /// Make sure the configured default domain exists and is flagged default.
-    let ensureDefault (db: Db) (authority: string) : Task<DomainRow> =
+    let ensureDefault (db: Db) (authority: DomainAuthority) : Task<DomainRow> =
         task {
             use conn = db.CreateConnection()
             let! _ =
@@ -30,15 +31,15 @@ module DomainRepo =
                     """INSERT INTO domains (authority, is_default, created_at)
                        VALUES (@authority, @isDefault, @now)
                        ON CONFLICT (authority) DO NOTHING""",
-                    {| authority = authority; isDefault = true; now = DateTime.UtcNow |})
+                    {| authority = authority.Value; isDefault = true; now = DateTime.UtcNow |})
             let! _ =
                 conn.ExecuteAsync(
                     "UPDATE domains SET is_default = (authority = @authority)",
-                    {| authority = authority |})
+                    {| authority = authority.Value |})
             let! row =
                 conn.QuerySingleAsync<DomainRow>(
                     $"SELECT {selectCols} FROM domains WHERE authority = @authority",
-                    {| authority = authority |})
+                    {| authority = authority.Value |})
             return row
         }
 
@@ -52,7 +53,7 @@ module DomainRepo =
             return Seq.tryHead rows
         }
 
-    let tryGetById (db: Db) (id: int64) : Task<DomainRow option> =
+    let tryGetById (db: Db) (DomainId id) : Task<DomainRow option> =
         task {
             use conn = db.CreateConnection()
             let! rows =
@@ -94,7 +95,7 @@ module DomainRepo =
         }
 
     /// Create a non-default domain. Returns None if the authority already exists.
-    let create (db: Db) (authority: string) : Task<DomainRow option> =
+    let create (db: Db) (authority: DomainAuthority) : Task<DomainRow option> =
         task {
             use conn = db.CreateConnection()
             let! affected =
@@ -102,20 +103,20 @@ module DomainRepo =
                     """INSERT INTO domains (authority, is_default, created_at)
                        VALUES (@authority, @f, @now)
                        ON CONFLICT (authority) DO NOTHING""",
-                    {| authority = authority; f = false; now = DateTime.UtcNow |})
+                    {| authority = authority.Value; f = false; now = DateTime.UtcNow |})
             if affected = 0 then
                 return None
             else
                 let! rows =
                     conn.QueryAsync<DomainRow>(
                         $"SELECT {selectCols} FROM domains WHERE authority = @authority",
-                        {| authority = authority |})
+                        {| authority = authority.Value |})
                 return Seq.tryHead rows
         }
 
     let updateRedirects
         (db: Db)
-        (id: int64)
+        (DomainId id)
         (baseUrlRedirect: string option)
         (regular404Redirect: string option)
         (invalidShortUrlRedirect: string option)
@@ -132,7 +133,7 @@ module DomainRepo =
         }
 
     /// Delete a domain (cascades to its short URLs). The default domain cannot be deleted.
-    let delete (db: Db) (id: int64) : Task<bool> =
+    let delete (db: Db) (DomainId id) : Task<bool> =
         task {
             use conn = db.CreateConnection()
             let! affected =

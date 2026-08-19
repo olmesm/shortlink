@@ -3,10 +3,13 @@ namespace Shortlink.Data
 open System
 open System.Data.Common
 open System.Globalization
+open System.Threading.Tasks
 open Dapper
 open Microsoft.Data.Sqlite
 open Npgsql
+open Shortlink.Core
 
+[<RequireQualifiedAccess>]
 type Dialect =
     | Sqlite
     | Postgres
@@ -18,23 +21,31 @@ type Db =
 
     member this.CreateConnection() : DbConnection =
         match this.Dialect with
-        | Sqlite ->
+        | Dialect.Sqlite ->
             let conn = new SqliteConnection(this.ConnectionString)
             conn.Open()
             use cmd = conn.CreateCommand()
             cmd.CommandText <- "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;"
             cmd.ExecuteNonQuery() |> ignore
             conn :> DbConnection
-        | Postgres ->
+        | Dialect.Postgres ->
             let conn = new NpgsqlConnection(this.ConnectionString)
             conn.Open()
             conn :> DbConnection
 
+    /// SQL literal for a boolean value in this dialect.
+    member this.BoolLiteral(value: bool) =
+        match this.Dialect, value with
+        | Dialect.Sqlite, true -> "1"
+        | Dialect.Sqlite, false -> "0"
+        | Dialect.Postgres, true -> "TRUE"
+        | Dialect.Postgres, false -> "FALSE"
+
     /// SQL expression grouping a timestamp column by calendar day (UTC), as 'YYYY-MM-DD'.
     member this.DayExpr(column: string) =
         match this.Dialect with
-        | Sqlite -> $"strftime('%%Y-%%m-%%d', {column})"
-        | Postgres -> $"to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD')"
+        | Dialect.Sqlite -> $"strftime('%%Y-%%m-%%d', {column})"
+        | Dialect.Postgres -> $"to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD')"
 
     /// Case-insensitive LIKE comparison.
     member this.ILike(column: string, param: string) =
@@ -45,8 +56,22 @@ type Db =
     /// Always pass the parameter as an array, not an F# list.
     member this.InList(column: string, param: string) =
         match this.Dialect with
-        | Sqlite -> $"{column} IN {param}"
-        | Postgres -> $"{column} = ANY({param})"
+        | Dialect.Sqlite -> $"{column} IN {param}"
+        | Dialect.Postgres -> $"{column} = ANY({param})"
+
+/// SQL fragments whose meaning is owned by the domain layer. Repositories
+/// must use these instead of re-typing the underlying literals, so a change
+/// to a stored slug can never silently diverge from the domain.
+[<RequireQualifiedAccess>]
+module Sql =
+
+    /// Predicate: the visit row is a real short-URL visit (not orphan traffic).
+    let isValidVisit (alias: string) =
+        $"{alias}.visit_type = '{VisitType.ValidShortUrl.Slug}'"
+
+    /// Predicate: the visit row is orphan traffic of any kind.
+    let isOrphanVisit (alias: string) =
+        $"{alias}.visit_type <> '{VisitType.ValidShortUrl.Slug}'"
 
 module private TypeHandlers =
 
@@ -122,5 +147,17 @@ module Db =
 
     let create (dialect: Dialect) (connectionString: string) : Db =
         registerTypeHandlers ()
+
         { Dialect = dialect
           ConnectionString = connectionString }
+
+    /// Run several statements atomically on one connection. The transaction
+    /// commits when `work` completes and rolls back if it throws.
+    let withTransaction (db: Db) (work: DbConnection -> DbTransaction -> Task<'T>) : Task<'T> =
+        task {
+            use conn = db.CreateConnection()
+            use tx = conn.BeginTransaction()
+            let! result = work conn tx
+            tx.Commit()
+            return result
+        }

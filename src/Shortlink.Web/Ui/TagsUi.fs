@@ -101,18 +101,39 @@ module TagsUi =
 
     /// POST /admin/tags/rename
     let rename: HttpHandler =
-        UiAuth.requireUser (fun _user ->
+        UiAuth.requireUser (fun user ->
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
                     let! form = Request.getForm ctx
                     let oldName = form.GetString("oldName", "")
-                    match Validation.normalizeTag (form.GetString("newName", "")) with
-                    | Ok newName when oldName <> "" ->
-                        let! _ = TagRepo.rename db oldName newName
-                        ()
-                    | _ -> ()
-                    return! Response.redirectTemporarily "/admin/tags" ctx
+
+                    let! outcome =
+                        task {
+                            match TagName.create (form.GetString("newName", "")) with
+                            | Error e -> return Error e
+                            | Ok newName ->
+                                let! renamed = TagRepo.rename db oldName newName
+
+                                return
+                                    renamed
+                                    |> Result.mapError (function
+                                        | TagRenameError.TagNotFound name -> $"Tag '{name}' was not found."
+                                        | TagRenameError.NameTaken name -> $"A tag named '{name}' already exists.")
+                        }
+
+                    match outcome with
+                    | Ok() -> return! Response.redirectTemporarily "/admin/tags" ctx
+                    | Error message ->
+                        let! result = TagRepo.list db None 1 25
+                        let content =
+                            [ Elem.h1 [] [ Text.raw "Tags" ]
+                              Layout.alertError message
+                              tagTable result ]
+                        return!
+                            (Response.withStatusCode 400
+                             >> Response.ofHtml (Layout.page user "/admin/tags" "Tags" content))
+                                ctx
                 }
                 :> Task)
 

@@ -12,6 +12,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
+open Shortlink.Core
 open Shortlink.Data
 open Shortlink.Web.Handlers
 
@@ -33,6 +34,7 @@ module App =
         services.AddHttpClient("geoip", fun c -> c.Timeout <- TimeSpan.FromMinutes 5.0) |> ignore
 
         services
+            .AddHostedService<EventWorker>()
             .AddHostedService<GeoWorker>()
             .AddHostedService<TitleWorker>()
             .AddHostedService<WebhookWorker>()
@@ -61,7 +63,7 @@ module App =
     let initialize (cfg: AppConfig) (db: Db) (logger: ILogger) : Task<unit> =
         task {
             Migrations.run db
-            let! _ = DomainRepo.ensureDefault db (cfg.DefaultDomain.ToLowerInvariant())
+            let! _ = DomainRepo.ensureDefault db cfg.DefaultDomain
 
             let! userCount = UserRepo.count db
             if userCount = 0L then
@@ -72,7 +74,7 @@ module App =
                     | None ->
                         let bytes = Security.Cryptography.RandomNumberGenerator.GetBytes(12)
                         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_'), true
-                let! created = UserRepo.insert db username (Passwords.hash password) "admin"
+                let! created = UserRepo.insert db username (Passwords.hash password) UserRole.Admin
                 match created with
                 | Some _ when generated ->
                     logger.LogWarning(

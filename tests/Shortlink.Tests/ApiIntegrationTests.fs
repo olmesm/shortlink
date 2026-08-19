@@ -4,6 +4,7 @@ open System.Net
 open System.Text.Json
 open Xunit
 open Shortlink.Tests
+open Shortlink.Web
 
 type ApiTests(app: TestApp) =
 
@@ -105,6 +106,63 @@ type ApiTests(app: TestApp) =
         }
 
     [<Fact>]
+    member _.``invariants hold at the API boundary too``() =
+        task {
+            let client = app.AdminClient()
+
+            // A zero visit budget would create a link that is born expired.
+            let! zeroVisits, zeroBody =
+                postJson client "/rest/v1/short-urls" """{"longUrl":"https://example.com/z","maxVisits":0}"""
+            Assert.Equal(HttpStatusCode.BadRequest, zeroVisits.StatusCode)
+            Assert.Contains("greater than zero", zeroBody)
+
+            // An inverted validity window can never be valid.
+            let! inverted, invertedBody =
+                postJson client "/rest/v1/short-urls"
+                    """{"longUrl":"https://example.com/w","validSince":"2026-05-01T00:00:00Z","validUntil":"2026-04-01T00:00:00Z"}"""
+            Assert.Equal(HttpStatusCode.BadRequest, inverted.StatusCode)
+            Assert.Contains("earlier than", invertedBody)
+
+            // Unsupported redirect statuses are named in the rejection.
+            let! badStatus, badStatusBody =
+                postJson client "/rest/v1/short-urls" """{"longUrl":"https://example.com/s","redirectStatus":418}"""
+            Assert.Equal(HttpStatusCode.BadRequest, badStatus.StatusCode)
+            Assert.Contains("418", badStatusBody)
+
+            // PATCH validates the merged result, not just the patch.
+            let! _, createBody =
+                postJson client "/rest/v1/short-urls" """{"longUrl":"https://example.com/patch-me"}"""
+            use created = JsonDocument.Parse createBody
+            let code = created.RootElement.GetProperty("shortCode").GetString()
+            let! patchResponse, _ = patchJson client $"/rest/v1/short-urls/{code}" """{"maxVisits":-3}"""
+            Assert.Equal(HttpStatusCode.BadRequest, patchResponse.StatusCode)
+        }
+
+    [<Fact>]
+    member _.``keys with unparseable stored roles are rejected, not admin``() =
+        task {
+            // Simulate a corrupt row: role text nothing recognizes.
+            let plain = ApiKeys.generate ()
+            let db = app.Db
+            do!
+                task {
+                    use conn = db.CreateConnection()
+                    let! _ =
+                        Dapper.SqlMapper.ExecuteAsync(
+                            conn,
+                            """INSERT INTO api_keys (key_hash, name, role, domain_id, enabled, expires_at, created_at)
+                               VALUES (@h, 'corrupt', 'superuser', NULL, 1, NULL, @now)""",
+                            {| h = ApiKeys.hash plain; now = System.DateTime.UtcNow |})
+                    ()
+                }
+
+            let client = app.CreateClient()
+            client.DefaultRequestHeaders.Add("X-Api-Key", plain)
+            let! response, _ = getJson client "/rest/v1/short-urls"
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode)
+        }
+
+    [<Fact>]
     member _.``invalid long URLs are rejected with 400``() =
         task {
             let client = app.AdminClient()
@@ -117,9 +175,9 @@ type ApiTests(app: TestApp) =
     member _.``author keys only see their own short URLs``() =
         task {
             let authorClient = app.CreateClient()
-            authorClient.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey "author")
+            authorClient.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey Shortlink.Core.ApiKeyRole.Author)
             let otherClient = app.CreateClient()
-            otherClient.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey "author")
+            otherClient.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey Shortlink.Core.ApiKeyRole.Author)
 
             let! _, createBody =
                 postJson authorClient "/rest/v1/short-urls" """{"longUrl":"https://example.com/mine-only"}"""
@@ -142,7 +200,7 @@ type ApiTests(app: TestApp) =
     member _.``non-admin keys cannot manage api keys``() =
         task {
             let client = app.CreateClient()
-            client.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey "author")
+            client.DefaultRequestHeaders.Add("X-Api-Key", app.CreateApiKey Shortlink.Core.ApiKeyRole.Author)
             let! response, _ = getJson client "/rest/v1/api-keys"
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode)
         }

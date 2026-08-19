@@ -91,7 +91,7 @@ module WebhooksUi =
                                     for e in WebhookEvent.All do
                                         // Dots in form field names would be read as nested keys.
                                         let fieldName = "event_" + e.Slug.Replace(".", "_")
-                                        Layout.checkbox fieldName (e = UrlCreated) e.Slug ]
+                                        Layout.checkbox fieldName (e = WebhookEvent.UrlCreated) e.Slug ]
                               Elem.div [] [ Elem.button [] [ Text.raw "Create webhook" ] ] ] ] ]
         }
 
@@ -120,7 +120,6 @@ module WebhooksUi =
                         |> List.filter (fun e ->
                             let fieldName = "event_" + e.Slug.Replace(".", "_")
                             form.GetString(fieldName, "") = "true")
-                        |> List.map (fun e -> e.Slug)
                     let validUrl =
                         match Uri.TryCreate(url, UriKind.Absolute) with
                         | true, uri -> uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps
@@ -153,7 +152,7 @@ module WebhooksUi =
                     let! hooks = WebhookRepo.list db
                     match hooks |> List.tryFind (fun h -> h.Id = id) with
                     | Some h ->
-                        let! _ = WebhookRepo.setEnabled db id (not h.Enabled)
+                        let! _ = WebhookRepo.setEnabled db (WebhookId id) (not h.Enabled)
                         ()
                     | None -> ()
                     return! Response.redirectTemporarily "/admin/webhooks" ctx
@@ -166,7 +165,7 @@ module WebhooksUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = WebhookId((Request.getRoute ctx).GetInt64 "id")
                     let! _ = WebhookRepo.delete db id
                     return! Response.redirectTemporarily "/admin/webhooks" ctx
                 }

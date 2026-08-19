@@ -152,15 +152,15 @@ module VisitsUi =
                 task {
                     let db = svc<Db> ctx
                     let cfg = svc<AppConfig> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = ShortUrlId((Request.getRoute ctx).GetInt64 "id")
                     let! detail = ShortUrlRepo.tryGetDetailById db id
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
                     | Some detail ->
                         let q = Request.getQuery ctx
                         let! content =
-                            analyticsContent false db (ShortUrlVisits detail.Id)
-                                (fun f -> VisitRepo.listForShortUrl db detail.Id f)
+                            analyticsContent false db (VisitScope.ShortUrl(ShortUrlId detail.Id))
+                                (fun f -> VisitRepo.listForShortUrl db (ShortUrlId detail.Id) f)
                                 $"/admin/short-urls/{detail.Id}/visits" q
                         let header =
                             [ Elem.h1
@@ -172,7 +172,7 @@ module VisitsUi =
                                   [ Elem.a [ Attr.href $"/admin/short-urls/{detail.Id}/edit" ] [ Text.raw "← Back to edit" ]
                                     Text.raw " · "
                                     Elem.a
-                                        [ Attr.href (Services.shortUrlFor cfg detail.Authority detail.ShortCode)
+                                        [ Attr.href (Dto.shortUrlFor cfg detail.Authority detail.ShortCode)
                                           Attr.target "_blank"
                                           Attr.rel "noreferrer" ]
                                         [ Text.enc detail.LongUrl ] ] ]
@@ -189,7 +189,7 @@ module VisitsUi =
                     let q = Request.getQuery ctx
                     let visitType = q.TryGetString "type" |> Option.bind VisitType.OfSlug
                     let! content =
-                        analyticsContent true db OrphanVisits
+                        analyticsContent true db VisitScope.Orphan
                             (fun f -> VisitRepo.listOrphan db visitType f)
                             "/admin/visits/orphan" q
                     let header =

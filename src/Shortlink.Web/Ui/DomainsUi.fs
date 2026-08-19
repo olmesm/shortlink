@@ -96,17 +96,31 @@ module DomainsUi =
 
     /// POST /admin/domains (admin)
     let create: HttpHandler =
-        UiAuth.requireAdmin (fun _user ->
+        UiAuth.requireAdmin (fun user ->
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
                     let! form = Request.getForm ctx
-                    match Validation.validateDomainAuthority (form.GetString("authority", "")) with
+
+                    match DomainAuthority.create (form.GetString("authority", "")) with
                     | Ok authority ->
-                        let! _ = DomainRepo.create db authority
-                        ()
-                    | Error _ -> ()
-                    return! Response.redirectTemporarily "/admin/domains" ctx
+                        let! created = DomainRepo.create db authority
+
+                        match created with
+                        | Some _ -> return! Response.redirectTemporarily "/admin/domains" ctx
+                        | None ->
+                            return!
+                                Layout.respond user "/admin/domains" "Domains"
+                                    [ Layout.alertError $"Domain '{authority.Value}' is already registered."
+                                      Elem.p [] [ Elem.a [ Attr.href "/admin/domains" ] [ Text.raw "← Back to domains" ] ] ]
+                                    ctx
+                    | Error message ->
+                        return!
+                            (Response.withStatusCode 400
+                             >> Layout.respond user "/admin/domains" "Domains"
+                                 [ Layout.alertError message
+                                   Elem.p [] [ Elem.a [ Attr.href "/admin/domains" ] [ Text.raw "← Back to domains" ] ] ])
+                                ctx
                 }
                 :> Task)
 
@@ -116,7 +130,7 @@ module DomainsUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = DomainId((Request.getRoute ctx).GetInt64 "id")
                     let! form = Request.getForm ctx
                     let getOpt name =
                         match form.GetString(name, "") with
@@ -135,7 +149,7 @@ module DomainsUi =
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
-                    let id = (Request.getRoute ctx).GetInt64 "id"
+                    let id = DomainId((Request.getRoute ctx).GetInt64 "id")
                     let! _ = DomainRepo.delete db id
                     return! Response.redirectTemporarily "/admin/domains" ctx
                 }

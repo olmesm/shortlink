@@ -7,7 +7,7 @@ open Microsoft.AspNetCore.Http
 open Shortlink.Core
 open Shortlink.Data
 
-/// Visit capture: privacy-aware extraction of request data plus webhook fan-out.
+/// Visit capture: privacy-aware extraction of request data plus event publishing.
 module Tracking =
 
     let private uaParser = UAParser.Parser.GetDefault()
@@ -39,17 +39,13 @@ module Tracking =
         | Some param -> ctx.Request.Query.ContainsKey param
         | None -> false
 
-    /// Data attached to webhook events about the visited short URL.
-    type VisitedShortUrl =
-        { ShortCode: string
-          Domain: string
-          LongUrl: string }
-
-    /// Record a visit (if tracking settings allow it) and fan out webhook events.
+    /// Record a visit (if tracking settings allow it) and publish the
+    /// matching event. The only synchronous work is one INSERT; geolocation
+    /// and webhook fan-out run on background workers.
     let record
         (ctx: HttpContext)
         (visitType: VisitType)
-        (shortUrl: (int64 * VisitedShortUrl) option)
+        (shortUrl: (ShortUrlId * VisitedShortUrl) option)
         : Task<unit> =
         task {
             let cfg = svc<AppConfig> ctx
@@ -71,14 +67,17 @@ module Tracking =
                     | Some ua ->
                         try
                             let parsed = uaParser.Parse ua
+
                             let family (s: string) =
                                 if String.IsNullOrWhiteSpace s || s = "Other" then None else Some s
+
                             family parsed.UA.Family, family parsed.OS.Family
                         with _ ->
                             None, None
 
                 let ip =
-                    if cfg.DisableIpTracking then None
+                    if cfg.DisableIpTracking then
+                        None
                     else
                         match remoteIp ctx with
                         | Some ip when cfg.AnonymizeIps -> Anonymize.anonymizeIp ip
@@ -86,19 +85,25 @@ module Tracking =
 
                 let visitedUrl =
                     if visitType.IsOrphan then
-                        Some(ctx.Request.Scheme + "://" + ctx.Request.Host.Value + ctx.Request.Path.Value + ctx.Request.QueryString.Value)
+                        Some(
+                            ctx.Request.Scheme
+                            + "://"
+                            + ctx.Request.Host.Value
+                            + ctx.Request.Path.Value
+                            + ctx.Request.QueryString.Value
+                        )
                     else
                         None
 
                 let visit: NewVisit =
                     { ShortUrlId = shortUrl |> Option.map fst
-                      VisitType = visitType.Slug
+                      VisitType = visitType
                       VisitedAt = DateTime.UtcNow
                       Referer = referer
                       UserAgent = userAgent
                       Browser = browser
                       Os = os
-                      Device = Some (RedirectRules.detectDevice userAgent).Slug
+                      Device = RedirectRules.detectDevice userAgent
                       IsBot = isBot userAgent
                       RemoteIp = ip
                       VisitedUrl = visitedUrl }
@@ -109,15 +114,13 @@ module Tracking =
                 | Some ip -> queues.GeoQueue.Writer.TryWrite((visitId, ip)) |> ignore
                 | None -> ()
 
-                let eventSlug =
-                    if visitType.IsOrphan then OrphanVisitRecorded.Slug else VisitRecorded.Slug
+                let payload: VisitEventPayload =
+                    { VisitType = visitType.Slug
+                      ShortUrl = shortUrl |> Option.map snd
+                      VisitedUrl = visitedUrl
+                      Referer = referer
+                      UserAgent = userAgent
+                      PotentialBot = visit.IsBot }
 
-                do!
-                    WebhookEvents.publish db queues eventSlug
-                        {| visitType = visitType.Slug
-                           shortUrl = shortUrl |> Option.map snd
-                           visitedUrl = visitedUrl
-                           referer = referer
-                           userAgent = userAgent
-                           potentialBot = isBot userAgent |}
+                Events.publish queues (if visitType.IsOrphan then OrphanVisitRecorded payload else VisitRecorded payload)
         }

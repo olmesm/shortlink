@@ -48,6 +48,7 @@ module ShortUrlsUi =
               if lq.OrderBy <> "dateCreated" then $"orderBy={lq.OrderBy}"
               if lq.Dir <> "desc" then $"dir={lq.Dir}"
               if page > 1 then $"page={page}" ]
+
         match parts with
         | [] -> "/admin/short-urls"
         | parts -> "/admin/short-urls?" + String.Join("&", parts)
@@ -58,11 +59,11 @@ module ShortUrlsUi =
             Tags = (if lq.Tag = "" then [] else [ lq.Tag ])
             OrderBy =
                 (match lq.OrderBy with
-                 | "shortCode" -> ByShortCode
-                 | "longUrl" -> ByLongUrl
-                 | "title" -> ByTitle
-                 | "visits" -> ByVisits
-                 | _ -> ByDateCreated)
+                 | "shortCode" -> ShortUrlOrder.ShortCode
+                 | "longUrl" -> ShortUrlOrder.LongUrl
+                 | "title" -> ShortUrlOrder.Title
+                 | "visits" -> ShortUrlOrder.Visits
+                 | _ -> ShortUrlOrder.DateCreated)
             Descending = lq.Dir <> "asc"
             Page = lq.Page
             ItemsPerPage = 20 }
@@ -72,8 +73,10 @@ module ShortUrlsUi =
     let private sortHeader (lq: ListQuery) (field: string) (label: string) =
         let nextDir = if lq.OrderBy = field && lq.Dir = "desc" then "asc" else "desc"
         let url = listUrl { lq with OrderBy = field; Dir = nextDir; Page = 1 } 1
+
         let marker =
             if lq.OrderBy = field then (if lq.Dir = "asc" then " ↑" else " ↓") else ""
+
         Elem.th
             []
             [ Elem.a
@@ -110,7 +113,8 @@ module ShortUrlsUi =
                           Elem.tbody
                               []
                               [ for d in page.Items do
-                                    let shortUrl = Services.shortUrlFor cfg d.Authority d.ShortCode
+                                    let shortUrl = Dto.shortUrlFor cfg d.Authority d.ShortCode
+
                                     Elem.tr
                                         []
                                         [ Elem.td
@@ -162,12 +166,14 @@ module ShortUrlsUi =
                     let q = Request.getQuery ctx
                     let lq = readListQuery q
                     let! page = ShortUrlRepo.list db (filtersOf lq)
-                    let! tagsByUrl = TagRepo.forShortUrls db (page.Items |> List.map (fun d -> d.Id))
+                    let! tagsByUrl = TagRepo.forShortUrls db (page.Items |> List.map (fun d -> ShortUrlId d.Id))
                     let table = urlTable cfg lq page tagsByUrl
+
                     if Htmx.isHtmx ctx then
                         return! Response.ofHtml table ctx
                     else
                         let! allTags = TagRepo.listAllNames db
+
                         let content =
                             [ Elem.h1 [] [ Text.raw "Short URLs" ]
                               Elem.div
@@ -176,7 +182,8 @@ module ShortUrlsUi =
                                         [ Htmx.hxGet "/admin/short-urls"
                                           Htmx.hxTarget "#su-table"
                                           Htmx.hxSwap "outerHTML"
-                                          Htmx.hxTrigger "submit, input delay:400ms from:input[name='search'], change from:select"
+                                          Htmx.hxTrigger
+                                              "submit, input delay:400ms from:input[name='search'], change from:select"
                                           Htmx.hxPushUrl
                                           Attr.method "get"
                                           Attr.action "/admin/short-urls" ]
@@ -194,8 +201,11 @@ module ShortUrlsUi =
                                                           if t = lq.Tag then Attr.selected ]
                                                         [ Text.enc t ] ]
                                           Elem.button [ Attr.class' "secondary" ] [ Text.raw "Filter" ] ]
-                                    Elem.a [ Attr.class' "btn"; Attr.href "/admin/short-urls/new" ] [ Text.raw "+ New short URL" ] ]
+                                    Elem.a
+                                        [ Attr.class' "btn"; Attr.href "/admin/short-urls/new" ]
+                                        [ Text.raw "+ New short URL" ] ]
                               table ]
+
                         return! Layout.respond user "/admin/short-urls" "Short URLs" content ctx
                 }
                 :> Task)
@@ -215,12 +225,52 @@ module ShortUrlsUi =
                         if status = current then Attr.selected ]
                       [ Text.enc label ] ]
 
-    let private createForm (cfg: AppConfig) (error: string option) (values: Map<string, string>) : XmlNode list =
-        let v name = values.TryFind name |> Option.defaultValue ""
+    /// Everything the create form posted, echoed back verbatim on errors so
+    /// the visitor never loses their input.
+    type private CreateForm =
+        { LongUrl: string
+          CustomSlug: string
+          Domain: string
+          Title: string
+          Tags: string
+          ValidSince: string
+          ValidUntil: string
+          MaxVisits: string
+          RedirectStatus: int
+          ForwardQuery: bool
+          Crawlable: bool }
+
+    let private emptyCreateForm =
+        { LongUrl = ""
+          CustomSlug = ""
+          Domain = ""
+          Title = ""
+          Tags = ""
+          ValidSince = ""
+          ValidUntil = ""
+          MaxVisits = ""
+          RedirectStatus = 302
+          ForwardQuery = true
+          Crawlable = false }
+
+    let private readCreateForm (form: FormData) : CreateForm =
+        { LongUrl = form.GetString("longUrl", "")
+          CustomSlug = form.GetString("customSlug", "")
+          Domain = form.GetString("domain", "")
+          Title = form.GetString("title", "")
+          Tags = form.GetString("tags", "")
+          ValidSince = form.GetString("validSince", "")
+          ValidUntil = form.GetString("validUntil", "")
+          MaxVisits = form.GetString("maxVisits", "")
+          RedirectStatus = form.GetInt32("redirectStatus", 302)
+          ForwardQuery = form.GetString("forwardQuery", "") = "true"
+          Crawlable = form.GetString("crawlable", "") = "true" }
+
+    let private createFormPageContent (cfg: AppConfig) (error: string option) (form: CreateForm) : XmlNode list =
         [ Elem.h1 [] [ Text.raw "New short URL" ]
-          match error with
-          | Some e -> Layout.alertError e
-          | None -> Text.raw ""
+          (match error with
+           | Some e -> Layout.alertError e
+           | None -> Text.raw "")
           Elem.div
               [ Attr.class' "card" ]
               [ Elem.form
@@ -230,34 +280,32 @@ module ShortUrlsUi =
                           (Elem.input
                               [ Attr.type' "url"
                                 Attr.name "longUrl"
-                                Attr.value (v "longUrl")
+                                Attr.value form.LongUrl
                                 Attr.required
                                 Attr.placeholder "https://example.com/some/very/long/path" ])
                       Elem.div
                           [ Attr.class' "row" ]
-                          [ Layout.field "Custom slug (optional)" (Layout.textInput "customSlug" (v "customSlug") "my-campaign")
-                            Layout.field
-                                "Domain (optional)"
-                                (Layout.textInput "domain" (v "domain") cfg.DefaultDomain) ]
-                      Layout.field "Title (optional; auto-resolved when empty)" (Layout.textInput "title" (v "title") "")
-                      Layout.field "Tags (comma separated)" (Layout.textInput "tags" (v "tags") "marketing, launch")
+                          [ Layout.field "Custom slug (optional)" (Layout.textInput "customSlug" form.CustomSlug "my-campaign")
+                            Layout.field "Domain (optional)" (Layout.textInput "domain" form.Domain cfg.DefaultDomain.Value) ]
+                      Layout.field "Title (optional; auto-resolved when empty)" (Layout.textInput "title" form.Title "")
+                      Layout.field "Tags (comma separated)" (Layout.textInput "tags" form.Tags "marketing, launch")
                       Elem.div
                           [ Attr.class' "row" ]
                           [ Layout.field
                                 "Valid since (UTC)"
                                 (Elem.input
-                                    [ Attr.type' "datetime-local"; Attr.name "validSince"; Attr.value (v "validSince") ])
+                                    [ Attr.type' "datetime-local"; Attr.name "validSince"; Attr.value form.ValidSince ])
                             Layout.field
                                 "Valid until (UTC)"
                                 (Elem.input
-                                    [ Attr.type' "datetime-local"; Attr.name "validUntil"; Attr.value (v "validUntil") ])
+                                    [ Attr.type' "datetime-local"; Attr.name "validUntil"; Attr.value form.ValidUntil ])
                             Layout.field
                                 "Max visits"
                                 (Elem.input
-                                    [ Attr.type' "number"; Attr.name "maxVisits"; Attr.value (v "maxVisits"); Attr.min "1" ]) ]
-                      Layout.field "Redirect status" (redirectStatusSelect 302)
-                      Layout.checkbox "forwardQuery" true "Forward query params to the long URL"
-                      Layout.checkbox "crawlable" false "Allow search engines to crawl this short URL"
+                                    [ Attr.type' "number"; Attr.name "maxVisits"; Attr.value form.MaxVisits; Attr.min "1" ]) ]
+                      Layout.field "Redirect status" (redirectStatusSelect form.RedirectStatus)
+                      Layout.checkbox "forwardQuery" form.ForwardQuery "Forward query params to the long URL"
+                      Layout.checkbox "crawlable" form.Crawlable "Allow search engines to crawl this short URL"
                       Elem.div [] [ Elem.button [] [ Text.raw "Create short URL" ] ] ] ] ]
 
     /// GET /admin/short-urls/new
@@ -265,7 +313,7 @@ module ShortUrlsUi =
         UiAuth.requireUser (fun user ->
             fun ctx ->
                 let cfg = svc<AppConfig> ctx
-                Layout.respond user "/admin/short-urls" "New short URL" (createForm cfg None Map.empty) ctx)
+                Layout.respond user "/admin/short-urls" "New short URL" (createFormPageContent cfg None emptyCreateForm) ctx)
 
     /// POST /admin/short-urls/new
     let create: HttpHandler =
@@ -275,51 +323,50 @@ module ShortUrlsUi =
                     let db = svc<Db> ctx
                     let cfg = svc<AppConfig> ctx
                     let queues = svc<WorkQueues> ctx
-                    let! form = Request.getForm ctx
-                    let get name = form.GetString(name, "")
-                    let getOpt name =
-                        match get name with
-                        | "" -> None
-                        | v -> Some v
+                    let! rawForm = Request.getForm ctx
+                    let form = readCreateForm rawForm
 
-                    let input =
-                        { CreateShortUrlInput.make (get "longUrl") with
-                            CustomSlug = getOpt "customSlug"
-                            Domain = getOpt "domain"
-                            Title = getOpt "title"
-                            Tags =
-                                (get "tags").Split(',')
+                    let optional value = if value = "" then None else Some value
+
+                    let spec =
+                        ShortUrlSpec.create
+                            { LongUrl = form.LongUrl
+                              CustomSlug = optional form.CustomSlug
+                              CodeLength = None
+                              Domain = optional form.Domain
+                              Title = optional form.Title
+                              Tags =
+                                form.Tags.Split(',')
                                 |> Array.map (fun t -> t.Trim())
                                 |> Array.filter (fun t -> t <> "")
                                 |> Array.toList
-                            MaxVisits = getOpt "maxVisits" |> Option.bind (fun v -> match Int64.TryParse v with | true, n when n > 0L -> Some n | _ -> None)
-                            ValidSince = getOpt "validSince" |> Option.bind parseDateLocal
-                            ValidUntil = getOpt "validUntil" |> Option.bind parseDateLocal
-                            ForwardQuery = Some(get "forwardQuery" = "true")
-                            Crawlable = Some(get "crawlable" = "true")
-                            RedirectStatus = getOpt "redirectStatus" |> Option.bind (fun v -> match Int32.TryParse v with | true, n -> Some n | _ -> None)
-                            AuthorUserId = Some user.Id }
+                              ValidSince = optional form.ValidSince |> Option.bind parseDateLocal
+                              ValidUntil = optional form.ValidUntil |> Option.bind parseDateLocal
+                              MaxVisits =
+                                optional form.MaxVisits
+                                |> Option.bind (fun v ->
+                                    match Int64.TryParse v with
+                                    | true, n -> Some n
+                                    | _ -> None)
+                              RedirectStatus = Some form.RedirectStatus
+                              ForwardQuery = Some form.ForwardQuery
+                              Crawlable = Some form.Crawlable
+                              FindIfExists = false }
 
-                    let! result = Services.createShortUrl db cfg queues input
-                    match result with
+                    let! outcome =
+                        match spec with
+                        | Error e -> Task.FromResult(Error e)
+                        | Ok spec -> Services.createShortUrl db cfg queues (Some(Choice1Of2 user.Id)) spec
+
+                    match outcome with
                     | Ok _ -> return! Response.redirectTemporarily "/admin/short-urls" ctx
                     | Error e ->
-                        let message =
-                            match e with
-                            | DomainErrors.InvalidLongUrl m
-                            | DomainErrors.InvalidSlug m
-                            | DomainErrors.UnknownDomain m -> m
-                            | DomainErrors.SlugInUse(slug, domain) ->
-                                $"The slug '{slug}' is already in use on domain '{domain}'."
-                            | DomainErrors.CodeGenerationExhausted ->
-                                "Could not find a free short code; try again or use a custom slug."
-                        let values =
-                            [ "longUrl"; "customSlug"; "domain"; "title"; "tags"; "validSince"; "validUntil"; "maxVisits" ]
-                            |> List.map (fun name -> name, get name)
-                            |> Map.ofList
                         return!
                             (Response.withStatusCode 400
-                             >> Response.ofHtml (Layout.page user "/admin/short-urls" "New short URL" (createForm cfg (Some message) values)))
+                             >> Response.ofHtml (
+                                 Layout.page user "/admin/short-urls" "New short URL"
+                                     (createFormPageContent cfg (Some e.Message) form)
+                             ))
                                 ctx
                 }
                 :> Task)
@@ -335,13 +382,13 @@ module ShortUrlsUi =
 
     let private editPage
         (cfg: AppConfig)
-        (user: UiAuth.CurrentUser)
         (detail: ShortUrlDetail)
         (tags: string list)
         (rules: RedirectRule list)
         (banner: XmlNode option)
         : XmlNode list =
-        let shortUrl = Services.shortUrlFor cfg detail.Authority detail.ShortCode
+        let shortUrl = Dto.shortUrlFor cfg detail.Authority detail.ShortCode
+
         [ Elem.h1 [] [ Text.raw "Edit short URL" ]
           (match banner with
            | Some b -> b
@@ -363,8 +410,7 @@ module ShortUrlsUi =
                     [ Attr.class' "stack"; Attr.method "post"; Attr.action $"/admin/short-urls/{detail.Id}/edit" ]
                     [ Layout.field
                           "Long URL *"
-                          (Elem.input
-                              [ Attr.type' "url"; Attr.name "longUrl"; Attr.value detail.LongUrl; Attr.required ])
+                          (Elem.input [ Attr.type' "url"; Attr.name "longUrl"; Attr.value detail.LongUrl; Attr.required ])
                       Layout.field "Title" (Layout.textInput "title" (detail.Title |> Option.defaultValue "") "")
                       Layout.field "Tags (comma separated)" (Layout.textInput "tags" (String.Join(", ", tags)) "")
                       Elem.div
@@ -391,15 +437,14 @@ module ShortUrlsUi =
                       Layout.field "Redirect status" (redirectStatusSelect detail.RedirectStatus)
                       Layout.checkbox "forwardQuery" detail.ForwardQuery "Forward query params to the long URL"
                       Layout.checkbox "crawlable" detail.Crawlable "Allow search engines to crawl this short URL"
-                      Elem.div
-                          []
-                          [ Elem.button [] [ Text.raw "Save changes" ] ] ] ]
+                      Elem.div [] [ Elem.button [] [ Text.raw "Save changes" ] ] ] ]
           Elem.h2 [] [ Text.raw "Conditional redirect rules" ]
           Elem.div
               [ Attr.class' "card" ]
               [ Elem.p
                     [ Attr.class' "muted" ]
-                    [ Text.raw "Rules are evaluated top-down; the first rule whose conditions all match overrides the long URL." ]
+                    [ Text.raw
+                          "Rules are evaluated top-down; the first rule whose conditions all match overrides the long URL." ]
                 (if rules.IsEmpty then
                      Elem.p [ Attr.class' "muted" ] [ Text.raw "No rules configured." ]
                  else
@@ -440,15 +485,11 @@ module ShortUrlsUi =
                                                                  [ Attr.type' "hidden"
                                                                    Attr.name "priority"
                                                                    Attr.value (string rule.Priority) ]
-                                                             Elem.button
-                                                                 [ Attr.class' "danger small" ]
-                                                                 [ Text.raw "Remove" ] ] ] ] ] ] ])
+                                                             Elem.button [ Attr.class' "danger small" ] [ Text.raw "Remove" ] ] ] ] ] ] ])
                 Elem.h2 [] [ Text.raw "Add rule" ]
                 Elem.form
                     [ Attr.class' "stack"; Attr.method "post"; Attr.action $"/admin/short-urls/{detail.Id}/rules/add" ]
-                    [ Layout.field
-                          "Target long URL *"
-                          (Elem.input [ Attr.type' "url"; Attr.name "ruleLongUrl"; Attr.required ])
+                    [ Layout.field "Target long URL *" (Elem.input [ Attr.type' "url"; Attr.name "ruleLongUrl"; Attr.required ])
                       Elem.div
                           [ Attr.class' "row" ]
                           [ Layout.field
@@ -484,9 +525,18 @@ module ShortUrlsUi =
                       Attr.create "onsubmit" "return confirm('Delete all visits of this short URL?')" ]
                     [ Elem.button [ Attr.class' "danger" ] [ Text.raw "Delete its visits" ] ] ] ]
 
-    let private loadDetail (db: Db) (ctx: Microsoft.AspNetCore.Http.HttpContext) =
-        let id = (Request.getRoute ctx).GetInt64 "id"
+    let private loadDetail (db: Db) ctx =
+        let id = ShortUrlId((Request.getRoute ctx).GetInt64 "id")
         ShortUrlRepo.tryGetDetailById db id
+
+    let private respondEditPage (user: UiAuth.CurrentUser) (db: Db) (cfg: AppConfig) (detail: ShortUrlDetail) (banner: XmlNode option) : HttpHandler =
+        fun ctx ->
+            task {
+                let! tags = TagRepo.forShortUrl db (ShortUrlId detail.Id)
+                let! rules = ShortUrlRepo.getRules db (ShortUrlId detail.Id)
+                return! Layout.respond user "/admin/short-urls" "Edit short URL" (editPage cfg detail tags rules banner) ctx
+            }
+            :> Task
 
     /// GET /admin/short-urls/{id}/edit
     let editFormPage: HttpHandler =
@@ -496,14 +546,10 @@ module ShortUrlsUi =
                     let db = svc<Db> ctx
                     let cfg = svc<AppConfig> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
-                    | Some detail ->
-                        let! tags = TagRepo.forShortUrl db detail.Id
-                        let! rules = ShortUrlRepo.getRules db detail.Id
-                        return!
-                            Layout.respond user "/admin/short-urls" "Edit short URL"
-                                (editPage cfg user detail tags rules None) ctx
+                    | Some detail -> return! respondEditPage user db cfg detail None ctx
                 }
                 :> Task)
 
@@ -515,89 +561,97 @@ module ShortUrlsUi =
                     let db = svc<Db> ctx
                     let cfg = svc<AppConfig> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
                     | Some detail ->
                         let! form = Request.getForm ctx
                         let get name = form.GetString(name, "")
-                        let getOpt name =
-                            match get name with
-                            | "" -> None
-                            | v -> Some v
+                        let optional name = if get name = "" then None else Some(get name)
 
-                        match Validation.validateLongUrl (get "longUrl") with
-                        | Error e ->
-                            let! tags = TagRepo.forShortUrl db detail.Id
-                            let! rules = ShortUrlRepo.getRules db detail.Id
-                            return!
-                                (Response.withStatusCode 400
-                                 >> Response.ofHtml (
-                                     Layout.page user "/admin/short-urls" "Edit short URL"
-                                         (editPage cfg user detail tags rules (Some(Layout.alertError e)))))
-                                    ctx
-                        | Ok longUrl ->
-                            let newTitle = getOpt "title"
-                            let update: ShortUrlUpdate =
-                                { LongUrl = longUrl
-                                  Title = newTitle
-                                  TitleWasAutoResolved =
-                                    (newTitle = detail.Title && detail.TitleWasAutoResolved)
-                                  RedirectStatus =
-                                    getOpt "redirectStatus"
-                                    |> Option.bind (fun v -> match Int32.TryParse v with | true, n -> Some n | _ -> None)
-                                    |> Option.bind (RedirectStatus.OfCode >> Option.map (fun s -> s.Code))
-                                    |> Option.defaultValue detail.RedirectStatus
+                        let editSpec =
+                            ShortUrlEdit.create
+                                { LongUrl = get "longUrl"
+                                  Title = optional "title"
+                                  ValidSince = optional "validSince" |> Option.bind parseDateLocal
+                                  ValidUntil = optional "validUntil" |> Option.bind parseDateLocal
+                                  MaxVisits =
+                                    optional "maxVisits"
+                                    |> Option.bind (fun v ->
+                                        match Int64.TryParse v with
+                                        | true, n -> Some n
+                                        | _ -> None)
+                                  RedirectStatus = form.GetInt32("redirectStatus", detail.RedirectStatus)
                                   ForwardQuery = get "forwardQuery" = "true"
                                   Crawlable = get "crawlable" = "true"
-                                  MaxVisits =
-                                    getOpt "maxVisits"
-                                    |> Option.bind (fun v -> match Int64.TryParse v with | true, n when n > 0L -> Some n | _ -> None)
-                                  ValidSince = getOpt "validSince" |> Option.bind parseDateLocal
-                                  ValidUntil = getOpt "validUntil" |> Option.bind parseDateLocal }
-                            let! _ = ShortUrlRepo.update db detail.Id update
+                                  Tags =
+                                    Some(
+                                        (get "tags").Split(',')
+                                        |> Array.map (fun t -> t.Trim())
+                                        |> Array.filter (fun t -> t <> "")
+                                        |> Array.toList
+                                    ) }
 
-                            match Validation.normalizeTags ((get "tags").Split(',') |> Array.filter (fun t -> t.Trim() <> "")) with
-                            | Ok tags ->
-                                let! tagIds = TagRepo.ensure db tags
-                                do! TagRepo.setForShortUrl db detail.Id tagIds
-                            | Error _ -> ()
-
+                        match editSpec with
+                        | Error e ->
+                            return!
+                                (Response.withStatusCode 400
+                                 >> respondEditPage user db cfg detail (Some(Layout.alertError e.Message)))
+                                    ctx
+                        | Ok editSpec ->
+                            let! _ = Services.editShortUrl db cfg (ShortUrlId detail.Id) detail editSpec
                             return! Response.redirectTemporarily $"/admin/short-urls/{detail.Id}/edit" ctx
                 }
                 :> Task)
 
     /// POST /admin/short-urls/{id}/rules/add
     let addRule: HttpHandler =
-        UiAuth.requireUser (fun _user ->
+        UiAuth.requireUser (fun user ->
             fun ctx ->
                 task {
                     let db = svc<Db> ctx
+                    let cfg = svc<AppConfig> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
                     | Some detail ->
                         let! form = Request.getForm ctx
                         let get name = form.GetString(name, "")
+
                         let conditions =
                             [ match Device.OfSlug(get "device") with
-                              | Some d -> yield DeviceIs d
+                              | Some d -> DeviceIs d
                               | None -> ()
                               if (get "language").Trim() <> "" then
-                                  yield LanguageIs((get "language").Trim())
+                                  LanguageIs((get "language").Trim())
                               if (get "queryKey").Trim() <> "" then
-                                  yield QueryParamIs((get "queryKey").Trim(), (get "queryValue").Trim())
+                                  QueryParamIs((get "queryKey").Trim(), (get "queryValue").Trim())
                               if (get "ipAddress").Trim() <> "" then
-                                  yield IpInRange((get "ipAddress").Trim()) ]
-                        match Validation.validateLongUrl (get "ruleLongUrl"), conditions with
+                                  IpInRange((get "ipAddress").Trim()) ]
+
+                        match LongUrl.create (get "ruleLongUrl"), conditions with
                         | Ok target, (_ :: _) ->
-                            let! rules = ShortUrlRepo.getRules db detail.Id
+                            let! rules = ShortUrlRepo.getRules db (ShortUrlId detail.Id)
+
                             let newRule =
                                 { Priority = rules.Length + 1
-                                  LongUrl = target
+                                  LongUrl = target.Value
                                   Conditions = conditions }
-                            do! ShortUrlRepo.setRules db detail.Id (rules @ [ newRule ])
-                        | _ -> ()
-                        return! Response.redirectTemporarily $"/admin/short-urls/{detail.Id}/edit" ctx
+
+                            do! ShortUrlRepo.setRules db (ShortUrlId detail.Id) (rules @ [ newRule ])
+                            return! Response.redirectTemporarily $"/admin/short-urls/{detail.Id}/edit" ctx
+                        | Error e, _ ->
+                            return!
+                                (Response.withStatusCode 400
+                                 >> respondEditPage user db cfg detail (Some(Layout.alertError $"Could not add rule: {e}")))
+                                    ctx
+                        | Ok _, [] ->
+                            return!
+                                (Response.withStatusCode 400
+                                 >> respondEditPage user db cfg detail
+                                     (Some(Layout.alertError "A rule needs at least one condition (device, language, query param or IP).")))
+                                    ctx
                 }
                 :> Task)
 
@@ -608,14 +662,15 @@ module ShortUrlsUi =
                 task {
                     let db = svc<Db> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
                     | Some detail ->
                         let! form = Request.getForm ctx
                         let priority = form.GetInt32("priority", -1)
-                        let! rules = ShortUrlRepo.getRules db detail.Id
+                        let! rules = ShortUrlRepo.getRules db (ShortUrlId detail.Id)
                         let remaining = rules |> List.filter (fun r -> r.Priority <> priority)
-                        do! ShortUrlRepo.setRules db detail.Id remaining
+                        do! ShortUrlRepo.setRules db (ShortUrlId detail.Id) remaining
                         return! Response.redirectTemporarily $"/admin/short-urls/{detail.Id}/edit" ctx
                 }
                 :> Task)
@@ -627,11 +682,13 @@ module ShortUrlsUi =
                 task {
                     let db = svc<Db> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | Some detail ->
-                        let! _ = ShortUrlRepo.delete db detail.Id
+                        let! _ = ShortUrlRepo.delete db (ShortUrlId detail.Id)
                         ()
                     | None -> ()
+
                     return! Response.redirectTemporarily "/admin/short-urls" ctx
                 }
                 :> Task)
@@ -643,10 +700,11 @@ module ShortUrlsUi =
                 task {
                     let db = svc<Db> ctx
                     let! detail = loadDetail db ctx
+
                     match detail with
                     | None -> return! (Response.withStatusCode 404 >> Response.ofPlainText "Not found") ctx
                     | Some detail ->
-                        let! _ = VisitRepo.deleteForShortUrl db detail.Id
+                        let! _ = VisitRepo.deleteForShortUrl db (ShortUrlId detail.Id)
                         return! Response.redirectTemporarily $"/admin/short-urls/{detail.Id}/edit" ctx
                 }
                 :> Task)

@@ -3,46 +3,52 @@ namespace Shortlink.Data
 open System
 open System.Threading.Tasks
 open Dapper
+open Shortlink.Core
 
 module UserRepo =
 
     let private selectCols = "id, username, password_hash, role, created_at"
 
     /// Create a user. Returns None if the username is taken.
-    let insert (db: Db) (username: string) (passwordHash: string) (role: string) : Task<UserRow option> =
+    let insert (db: Db) (username: string) (passwordHash: string) (role: UserRole) : Task<UserRow option> =
         task {
             use conn = db.CreateConnection()
+
             let! affected =
                 conn.ExecuteAsync(
                     """INSERT INTO users (username, password_hash, role, created_at)
                        VALUES (@username, @passwordHash, @role, @now)
                        ON CONFLICT (username) DO NOTHING""",
-                    {| username = username; passwordHash = passwordHash; role = role; now = DateTime.UtcNow |})
+                    {| username = username
+                       passwordHash = passwordHash
+                       role = role.Slug
+                       now = DateTime.UtcNow |})
+
             if affected = 0 then
                 return None
             else
                 let! rows =
                     conn.QueryAsync<UserRow>(
-                        $"SELECT {selectCols} FROM users WHERE username = @username",
-                        {| username = username |})
+                        $"SELECT {selectCols} FROM users WHERE username = @username", {| username = username |})
+
                 return Seq.tryHead rows
         }
 
     let tryFindByUsername (db: Db) (username: string) : Task<UserRow option> =
         task {
             use conn = db.CreateConnection()
+
             let! rows =
                 conn.QueryAsync<UserRow>(
-                    $"SELECT {selectCols} FROM users WHERE username = @username",
-                    {| username = username |})
+                    $"SELECT {selectCols} FROM users WHERE username = @username", {| username = username |})
+
             return Seq.tryHead rows
         }
 
-    let tryFindById (db: Db) (id: int64) : Task<UserRow option> =
+    let tryFindById (db: Db) (UserId id) : Task<UserRow option> =
         task {
             use conn = db.CreateConnection()
-            let! rows =
-                conn.QueryAsync<UserRow>($"SELECT {selectCols} FROM users WHERE id = @id", {| id = id |})
+            let! rows = conn.QueryAsync<UserRow>($"SELECT {selectCols} FROM users WHERE id = @id", {| id = id |})
             return Seq.tryHead rows
         }
 
@@ -53,25 +59,27 @@ module UserRepo =
             return List.ofSeq rows
         }
 
-    let updatePassword (db: Db) (id: int64) (passwordHash: string) : Task<bool> =
+    let updatePassword (db: Db) (UserId id) (passwordHash: string) : Task<bool> =
         task {
             use conn = db.CreateConnection()
+
             let! affected =
-                conn.ExecuteAsync(
-                    "UPDATE users SET password_hash = @hash WHERE id = @id",
-                    {| id = id; hash = passwordHash |})
+                conn.ExecuteAsync("UPDATE users SET password_hash = @hash WHERE id = @id", {| id = id; hash = passwordHash |})
+
             return affected > 0
         }
 
-    let updateRole (db: Db) (id: int64) (role: string) : Task<bool> =
+    let updateRole (db: Db) (UserId id) (role: UserRole) : Task<bool> =
         task {
             use conn = db.CreateConnection()
+
             let! affected =
-                conn.ExecuteAsync("UPDATE users SET role = @role WHERE id = @id", {| id = id; role = role |})
+                conn.ExecuteAsync("UPDATE users SET role = @role WHERE id = @id", {| id = id; role = role.Slug |})
+
             return affected > 0
         }
 
-    let delete (db: Db) (id: int64) : Task<bool> =
+    let delete (db: Db) (UserId id) : Task<bool> =
         task {
             use conn = db.CreateConnection()
             let! affected = conn.ExecuteAsync("DELETE FROM users WHERE id = @id", {| id = id |})
@@ -87,5 +95,8 @@ module UserRepo =
     let countAdmins (db: Db) : Task<int64> =
         task {
             use conn = db.CreateConnection()
-            return! conn.ExecuteScalarAsync<int64>("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+
+            return!
+                conn.ExecuteScalarAsync<int64>(
+                    "SELECT COUNT(*) FROM users WHERE role = @role", {| role = UserRole.Admin.Slug |})
         }

@@ -1,13 +1,14 @@
 namespace Shortlink.Web
 
 open System
+open Shortlink.Core
 open Shortlink.Data
 
 /// All runtime configuration. Populated from SHORTLINK_* environment
 /// variables (see fromEnv), or constructed directly in tests.
 type AppConfig =
     { /// Authority (host[:port]) used to build short URLs when no domain is picked.
-      DefaultDomain: string
+      DefaultDomain: DomainAuthority
       /// Scheme used when rendering short URLs.
       UseHttps: bool
       DbDialect: Dialect
@@ -15,7 +16,7 @@ type AppConfig =
       /// Directory for runtime state: SQLite db, GeoIP db, data-protection keys.
       DataDir: string
       ShortCodeLength: int
-      DefaultRedirectStatus: int
+      DefaultRedirectStatus: RedirectStatus
       AutoResolveTitles: bool
       /// Master switch: when true no visits are recorded at all.
       DisableTracking: bool
@@ -69,26 +70,36 @@ module AppConfig =
         let dataDir = strVar get "DATA_DIR" |> Option.defaultValue "./data"
         let dialect =
             match strVar get "DB_DRIVER" |> Option.map (fun s -> s.ToLowerInvariant()) with
-            | Some "postgres" | Some "postgresql" | Some "pgsql" -> Postgres
-            | _ -> Sqlite
+            | Some "postgres" | Some "postgresql" | Some "pgsql" -> Dialect.Postgres
+            | _ -> Dialect.Sqlite
         let connString =
             match strVar get "DB_CONNECTION" with
             | Some cs -> cs
             | None ->
                 match dialect with
-                | Sqlite ->
+                | Dialect.Sqlite ->
                     let path = IO.Path.Combine(dataDir, "shortlink.db")
                     $"Data Source={path}"
-                | Postgres -> "Host=localhost;Database=shortlink;Username=shortlink;Password=shortlink"
+                | Dialect.Postgres -> "Host=localhost;Database=shortlink;Username=shortlink;Password=shortlink"
         let port = intVar get "PORT" 8080
 
-        { DefaultDomain = strVar get "DEFAULT_DOMAIN" |> Option.defaultValue $"localhost:{port}"
+        // Configuration errors should stop startup with a clear message.
+        let defaultDomain =
+            let raw = strVar get "DEFAULT_DOMAIN" |> Option.defaultValue $"localhost:{port}"
+            match DomainAuthority.create raw with
+            | Ok authority -> authority
+            | Error message -> failwith $"Invalid SHORTLINK_DEFAULT_DOMAIN '{raw}': {message}"
+
+        { DefaultDomain = defaultDomain
           UseHttps = boolVar get "USE_HTTPS" false
           DbDialect = dialect
           ConnectionString = connString
           DataDir = dataDir
-          ShortCodeLength = intVar get "SHORT_CODE_LENGTH" Shortlink.Core.ShortCode.defaultLength
-          DefaultRedirectStatus = intVar get "REDIRECT_STATUS" 302
+          ShortCodeLength = intVar get "SHORT_CODE_LENGTH" ShortCode.defaultLength
+          DefaultRedirectStatus =
+            intVar get "REDIRECT_STATUS" 302
+            |> RedirectStatus.OfCode
+            |> Option.defaultValue RedirectStatus.Found
           AutoResolveTitles = boolVar get "AUTO_RESOLVE_TITLES" true
           DisableTracking = boolVar get "DISABLE_TRACKING" false
           DisableIpTracking = boolVar get "DISABLE_IP_TRACKING" false
