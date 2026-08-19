@@ -89,7 +89,9 @@ module WebhooksUi =
                                   []
                                   [ Elem.label [] [ Text.raw "Events" ]
                                     for e in WebhookEvent.All do
-                                        Layout.checkbox $"event_{e.Slug}" (e = UrlCreated) e.Slug ]
+                                        // Dots in form field names would be read as nested keys.
+                                        let fieldName = "event_" + e.Slug.Replace(".", "_")
+                                        Layout.checkbox fieldName (e = UrlCreated) e.Slug ]
                               Elem.div [] [ Elem.button [] [ Text.raw "Create webhook" ] ] ] ] ]
         }
 
@@ -115,7 +117,9 @@ module WebhooksUi =
                     let url = form.GetString("url", "").Trim()
                     let events =
                         WebhookEvent.All
-                        |> List.filter (fun e -> form.GetString($"event_{e.Slug}", "") = "true")
+                        |> List.filter (fun e ->
+                            let fieldName = "event_" + e.Slug.Replace(".", "_")
+                            form.GetString(fieldName, "") = "true")
                         |> List.map (fun e -> e.Slug)
                     let validUrl =
                         match Uri.TryCreate(url, UriKind.Absolute) with

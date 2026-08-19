@@ -73,6 +73,21 @@ Run the test suite (88 unit + integration tests):
 dotnet test
 ```
 
+Run the browser end-to-end tests (Playwright driving the real dashboard in
+Chromium — 22 tests covering login, short URL lifecycle, htmx live search,
+redirect rules, analytics, tags, domains, API keys, webhooks, users and
+orphan visits; requires Node.js and the .NET SDK):
+
+```sh
+cd e2e
+npm install
+npx playwright install chromium   # once; or set PLAYWRIGHT_CHROMIUM_PATH to an existing binary
+npm test
+```
+
+The e2e config starts the app itself on port 18100 with a throw-away SQLite
+database, so no setup is needed.
+
 ## Configuration
 
 Everything is configured through environment variables.
@@ -194,6 +209,7 @@ src/
 tests/
   Shortlink.Tests/  xUnit: unit tests + full-stack integration tests on
                     an in-memory TestServer
+e2e/                Playwright browser tests driving the dashboard
 ```
 
 The redirect hot path does one indexed lookup, evaluates redirect rules in

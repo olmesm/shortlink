@@ -11,7 +11,7 @@ open Shortlink.Web.Handlers
 
 module VisitsUi =
 
-    let private visitTable (page: Paging.Page<VisitRow>) (buildUrl: int -> string) : XmlNode =
+    let private visitTable (showVisitedUrl: bool) (page: Paging.Page<VisitRow>) (buildUrl: int -> string) : XmlNode =
         Elem.div
             []
             [ Elem.div
@@ -23,6 +23,8 @@ module VisitsUi =
                               [ Elem.tr
                                     []
                                     [ Elem.th [] [ Text.raw "When (UTC)" ]
+                                      if showVisitedUrl then
+                                          Elem.th [] [ Text.raw "Visited URL" ]
                                       Elem.th [] [ Text.raw "Location" ]
                                       Elem.th [] [ Text.raw "Browser / OS" ]
                                       Elem.th [] [ Text.raw "Device" ]
@@ -34,6 +36,12 @@ module VisitsUi =
                                     Elem.tr
                                         []
                                         [ Elem.td [ Attr.class' "muted" ] [ Text.enc (Format.dateTime v.VisitedAt) ]
+                                          if showVisitedUrl then
+                                              Elem.td
+                                                  []
+                                                  [ Elem.span
+                                                        [ Attr.class' "truncate mono"; Attr.style "max-width:260px" ]
+                                                        [ Text.enc (v.VisitedUrl |> Option.defaultValue "—") ] ]
                                           Elem.td
                                               []
                                               [ Text.enc (
@@ -87,6 +95,7 @@ module VisitsUi =
 
     /// Shared analytics block: chart + breakdowns + visit table.
     let analyticsContent
+        (showVisitedUrl: bool)
         (db: Db)
         (scope: VisitScope)
         (listVisits: VisitFilters -> Task<Paging.Page<VisitRow>>)
@@ -133,7 +142,7 @@ module VisitsUi =
                         Charts.visitsPerDay series ]
                   Elem.div [ Attr.class' "split" ] [ byCountry; byBrowser; byOs; byReferer ]
                   Elem.h2 [] [ Text.raw "Visits" ]
-                  visitTable page query ]
+                  visitTable showVisitedUrl page query ]
         }
 
     /// GET /admin/short-urls/{id}/visits
@@ -150,7 +159,7 @@ module VisitsUi =
                     | Some detail ->
                         let q = Request.getQuery ctx
                         let! content =
-                            analyticsContent db (ShortUrlVisits detail.Id)
+                            analyticsContent false db (ShortUrlVisits detail.Id)
                                 (fun f -> VisitRepo.listForShortUrl db detail.Id f)
                                 $"/admin/short-urls/{detail.Id}/visits" q
                         let header =
@@ -180,7 +189,7 @@ module VisitsUi =
                     let q = Request.getQuery ctx
                     let visitType = q.TryGetString "type" |> Option.bind VisitType.OfSlug
                     let! content =
-                        analyticsContent db OrphanVisits
+                        analyticsContent true db OrphanVisits
                             (fun f -> VisitRepo.listOrphan db visitType f)
                             "/admin/visits/orphan" q
                     let header =
