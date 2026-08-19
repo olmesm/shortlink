@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <WarningLevel>3</WarningLevel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Config.fs" />
+    <Compile Include="Json.fs" />
+    <Compile Include="Problems.fs" />
+    <Compile Include="Security.fs" />
+    <Compile Include="Background.fs" />
+    <Compile Include="Tracking.fs" />
+    <Compile Include="Qr.fs" />
+    <Compile Include="Handlers/Redirect.fs" />
+    <Compile Include="Handlers/ApiCommon.fs" />
+    <Compile Include="Handlers/ApiShortUrls.fs" />
+    <Compile Include="Handlers/ApiTags.fs" />
+    <Compile Include="Handlers/ApiDomains.fs" />
+    <Compile Include="Handlers/ApiVisits.fs" />
+    <Compile Include="Handlers/ApiApiKeys.fs" />
+    <Compile Include="Handlers/ApiWebhooks.fs" />
+    <Compile Include="Handlers/Health.fs" />
+    <Compile Include="Ui/Htmx.fs" />
+    <Compile Include="Ui/Charts.fs" />
+    <Compile Include="Ui/Layout.fs" />
+    <Compile Include="Ui/Auth.fs" />
+    <Compile Include="Ui/ShortUrlsUi.fs" />
+    <Compile Include="Ui/VisitsUi.fs" />
+    <Compile Include="Ui/TagsUi.fs" />
+    <Compile Include="Ui/DomainsUi.fs" />
+    <Compile Include="Ui/ApiKeysUi.fs" />
+    <Compile Include="Ui/UsersUi.fs" />
+    <Compile Include="Ui/WebhooksUi.fs" />
+    <Compile Include="Ui/OverviewUi.fs" />
+    <Compile Include="App.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Falco" Version="5.2.0" />
+    <PackageReference Include="Falco.Markup" Version="1.4.0" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="UAParser" Version="3.1.47" />
+    <PackageReference Include="MaxMind.GeoIP2" Version="5.2.0" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shortlink.Core\Shortlink.Core.fsproj" />
+    <ProjectReference Include="..\Shortlink.Data\Shortlink.Data.fsproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <WarningLevel>3</WarningLevel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Db.fs" />
+    <Compile Include="Migrations.fs" />
+    <Compile Include="Rows.fs" />
+    <Compile Include="DomainRepo.fs" />
+    <Compile Include="TagRepo.fs" />
+    <Compile Include="ShortUrlRepo.fs" />
+    <Compile Include="VisitRepo.fs" />
+    <Compile Include="StatsRepo.fs" />
+    <Compile Include="ApiKeyRepo.fs" />
+    <Compile Include="UserRepo.fs" />
+    <Compile Include="WebhookRepo.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.35" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shortlink.Core\Shortlink.Core.fsproj" />
+  </ItemGroup>
+
+</Project>

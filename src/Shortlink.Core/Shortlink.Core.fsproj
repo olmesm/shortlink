@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningLevel>3</WarningLevel>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Types.fs" />
+    <Compile Include="ShortCode.fs" />
+    <Compile Include="Validation.fs" />
+    <Compile Include="Anonymize.fs" />
+    <Compile Include="RedirectRules.fs" />
+    <Compile Include="Paging.fs" />
+  </ItemGroup>
+
+</Project>
