@@ -22,8 +22,8 @@ module Redirect =
                     Elem.style
                         []
                         [ Text.raw
-                              "body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc;color:#0f172a}
-                               main{text-align:center;padding:2rem}h1{font-size:4rem;margin:0}p{color:#64748b}" ] ]
+                              "body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0b0d13;color:#e7eaf3}
+                               main{text-align:center;padding:2rem}h1{font-size:4rem;margin:0}p{color:#6b7385}" ] ]
               Elem.body
                   []
                   [ Elem.main [] [ Elem.h1 [] [ Text.raw "404" ]; Elem.p [] [ Text.enc message ] ] ] ]
@@ -48,8 +48,8 @@ module Redirect =
                     Elem.style
                         []
                         [ Text.raw
-                              "body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8fafc;color:#0f172a}
-                               main{text-align:center;padding:2rem}a{color:#2563eb}" ] ]
+                              "body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#0b0d13;color:#e7eaf3}
+                               main{text-align:center;padding:2rem}a{color:#818cf8}" ] ]
               Elem.body
                   []
                   [ Elem.main

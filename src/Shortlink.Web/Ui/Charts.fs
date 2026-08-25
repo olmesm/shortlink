@@ -50,8 +50,8 @@ module Charts =
             for gy in [ 0.0; 0.5; 1.0 ] do
                 let value = maxY * (1.0 - gy)
                 let yy = padT + plotH * gy
-                sb.Append($"<line x1=\"{inv padL}\" y1=\"{inv yy}\" x2=\"{inv (width - padR)}\" y2=\"{inv yy}\" stroke=\"#e2e8f0\" stroke-width=\"1\"/>")
-                  .Append($"<text x=\"{inv (padL - 6.0)}\" y=\"{inv (yy + 4.0)}\" font-size=\"11\" fill=\"#64748b\" text-anchor=\"end\">{int64 value}</text>")
+                sb.Append($"<line x1=\"{inv padL}\" y1=\"{inv yy}\" x2=\"{inv (width - padR)}\" y2=\"{inv yy}\" stroke=\"#222738\" stroke-width=\"1\"/>")
+                  .Append($"<text x=\"{inv (padL - 6.0)}\" y=\"{inv (yy + 4.0)}\" font-size=\"11\" fill=\"#6b7385\" text-anchor=\"end\">{int64 value}</text>")
                 |> ignore
 
             // Area + line
@@ -64,14 +64,14 @@ module Charts =
             let areaPath =
                 linePath
                 + $" L{inv (x (n - 1))},{inv (padT + plotH)} L{inv (x 0)},{inv (padT + plotH)} Z"
-            sb.Append($"<path d=\"{areaPath}\" fill=\"#dbeafe\" stroke=\"none\"/>")
-              .Append($"<path d=\"{linePath}\" fill=\"none\" stroke=\"#2563eb\" stroke-width=\"2\"/>")
+            sb.Append($"<path d=\"{areaPath}\" fill=\"rgba(129,140,248,0.16)\" stroke=\"none\"/>")
+              .Append($"<path d=\"{linePath}\" fill=\"none\" stroke=\"#818cf8\" stroke-width=\"2\"/>")
             |> ignore
 
             // Dots with tooltips
             for i, (day, v) in List.indexed points do
                 let label = WebUtility.HtmlEncode(day.ToString("yyyy-MM-dd"))
-                sb.Append($"<circle cx=\"{inv (x i)}\" cy=\"{inv (y v)}\" r=\"2.5\" fill=\"#2563eb\"><title>{label}: {v}</title></circle>")
+                sb.Append($"<circle cx=\"{inv (x i)}\" cy=\"{inv (y v)}\" r=\"2.5\" fill=\"#818cf8\"><title>{label}: {v}</title></circle>")
                 |> ignore
 
             // Sparse x labels
@@ -79,7 +79,7 @@ module Charts =
             for i, (day, _) in List.indexed points do
                 if i % labelEvery = 0 || i = n - 1 then
                     let label = WebUtility.HtmlEncode(day.ToString("MM-dd"))
-                    sb.Append($"<text x=\"{inv (x i)}\" y=\"{inv (height - 6.0)}\" font-size=\"10\" fill=\"#64748b\" text-anchor=\"middle\">{label}</text>")
+                    sb.Append($"<text x=\"{inv (x i)}\" y=\"{inv (height - 6.0)}\" font-size=\"10\" fill=\"#6b7385\" text-anchor=\"middle\">{label}</text>")
                     |> ignore
 
             sb.Append("</svg>") |> ignore
@@ -104,6 +104,6 @@ module Charts =
                                       []
                                       [ Elem.div
                                             [ Attr.style
-                                                  $"background:#dbeafe;border-radius:4px;height:1.1rem;width:{inv pct}%%;min-width:2px" ]
+                                                  $"background:rgba(129,140,248,0.35);border-radius:4px;height:1.1rem;width:{inv pct}%%;min-width:2px" ]
                                             [] ]
                                   Elem.td [ Attr.style "width:4rem;text-align:right" ] [ Text.raw (string value) ] ] ] ]
